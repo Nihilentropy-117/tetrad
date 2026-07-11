@@ -63,7 +63,7 @@ function reducer(st: ClientState, ev: Ev): ClientState {
           if (st.game && m.version <= st.game.version) return st; // stale
           const you = st.session?.you ?? "";
           const lines = m.events
-            .map((e) => fmtEvent(e, you))
+            .map((e) => fmtEvent(e, you, m.view))
             .filter((x): x is string => x !== null);
           return { ...st, game: m, feed: [...st.feed, ...lines].slice(-120), error: null };
         }

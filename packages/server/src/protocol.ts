@@ -26,6 +26,8 @@ export type ServerMsg =
       view: PlayerView;
       legal: ActionSpec[];
       events: GameEvent[];
+      /** epoch ms when the pending decision auto-resolves to its default */
+      deadline?: number;
     }
   | { t: "error"; code: string; message: string }
   | { t: "pong" };

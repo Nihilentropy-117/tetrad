@@ -4,7 +4,7 @@ import React, { useState } from "react";
 import { ScrollView, StyleSheet, Text, TextInput, View } from "react-native";
 import { Btn, ColorChip, theme } from "./components";
 import { defaultServerUrl, loadSession, useGame } from "./store";
-import { CLASS_META } from "./types";
+import { ABILITY_TEXT, CLASS_META } from "./types";
 
 export function ConnectScreen() {
   const { st, create, join, rejoin } = useGame();
@@ -107,7 +107,11 @@ export function ClassSelectScreen() {
       ) : (
         <View style={s.classGrid}>
           {choices.map((c) => {
-            const meta = CLASS_META[c.classId!] ?? { name: c.classId!, color: "red", blurb: "" };
+            const meta = CLASS_META[c.classId!];
+            const abilities = ABILITY_TEXT[c.classId!] ?? {};
+            const keyOrder = ["1", "2", "3", "4", "5", "6", "7", "8", "9", "stun", "counter", "rally", "advantage", "inspiration", "0"];
+            const keyLabel: Record<string, string> = { stun: "S", counter: "C", rally: "R", advantage: "A", inspiration: "I", "0": "0" };
+            if (!meta) return null;
             return (
               <View key={c.classId} style={s.classCard}>
                 <View style={{ flexDirection: "row", alignItems: "center", gap: 8 }}>
@@ -115,6 +119,21 @@ export function ClassSelectScreen() {
                   <Text style={s.className}>{meta.name}</Text>
                 </View>
                 <Text style={s.classBlurb}>{meta.blurb}</Text>
+                <View style={s.statsRow}>
+                  <Text style={s.stat}>❤ {meta.hp} HP</Text>
+                  <Text style={s.stat}>🎲 {meta.dice}</Text>
+                  <Text style={s.stat}>{meta.color} bonus {meta.bonus}</Text>
+                </View>
+                {meta.passive ? <Text style={s.passive}>{meta.passive}</Text> : null}
+                <View style={{ gap: 1 }}>
+                  {keyOrder
+                    .filter((k) => abilities[k])
+                    .map((k) => (
+                      <Text key={k} style={s.abilityLine}>
+                        <Text style={s.abilityKey}>{keyLabel[k] ?? k}</Text> {abilities[k].name}
+                      </Text>
+                    ))}
+                </View>
                 <Btn
                   label="Pick"
                   kind="primary"
@@ -163,9 +182,22 @@ const s = StyleSheet.create({
     borderColor: theme.line,
     borderRadius: 12,
     padding: 12,
-    width: 170,
+    width: 230,
     gap: 8,
   },
   className: { color: theme.text, fontWeight: "800", fontSize: 15 },
-  classBlurb: { color: theme.dim, fontSize: 11, minHeight: 28 },
+  classBlurb: { color: theme.dim, fontSize: 11 },
+  statsRow: { flexDirection: "row", flexWrap: "wrap", gap: 8 },
+  stat: {
+    color: theme.text,
+    fontSize: 11,
+    fontWeight: "700",
+    backgroundColor: theme.panelHi,
+    borderRadius: 6,
+    paddingHorizontal: 6,
+    paddingVertical: 3,
+  },
+  passive: { color: "#d8c27a", fontSize: 10.5, lineHeight: 15 },
+  abilityLine: { color: theme.dim, fontSize: 10.5, lineHeight: 15 },
+  abilityKey: { color: theme.accent, fontWeight: "800" },
 });

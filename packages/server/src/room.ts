@@ -70,6 +70,7 @@ export class Room {
   private log: Action[] = [];
   private version = 0;
   private timer: unknown = null;
+  private deadlineAt: number | null = null;
 
   constructor(opts: RoomOptions) {
     this.code = opts.code;
@@ -165,8 +166,8 @@ export class Room {
     this.state = initialState(config, this.seed);
     this.persist(JSON.stringify({ header: true, seed: this.seed, config }));
     this.version += 1;
-    this.broadcast([]);
     this.armDecisionTimer();
+    this.broadcast([]);
   }
 
   /** A client-intended action. The engine validates; we only map token→player. */
@@ -195,8 +196,8 @@ export class Room {
     this.log.push(action);
     this.version += 1;
     this.persist(JSON.stringify(action));
+    this.armDecisionTimer(); // stamp the deadline before broadcasting it
     this.broadcast(r.events);
-    this.armDecisionTimer();
   }
 
   /** Stale decisions get answered with their default (§3.2/§3.3). */
@@ -206,9 +207,11 @@ export class Room {
       this.timer = null;
     }
     const pending = this.state?.pending;
+    this.deadlineAt = null;
     if (!pending) return;
     const { id, player } = { id: pending.decision.id, player: pending.decision.player };
     const choice = pending.decision.default;
+    this.deadlineAt = Date.now() + this.decisionTimeoutMs;
     this.timer = this.scheduler.set(() => {
       this.timer = null;
       if (this.state?.pending?.decision.id !== id) return; // already answered
@@ -218,12 +221,14 @@ export class Room {
 
   private sendState(seat: Seat, events: GameEvent[]): void {
     if (!this.state || !seat.conn) return;
+    const view = redact(this.state, seat.playerId);
     seat.conn.send({
       t: "state",
       version: this.version,
-      view: redact(this.state, seat.playerId),
+      view,
       legal: legalActions(this.state, seat.playerId),
       events: eventsFor(events, seat.playerId),
+      ...(view.decision && this.deadlineAt !== null ? { deadline: this.deadlineAt } : {}),
     });
   }
 

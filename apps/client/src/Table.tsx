@@ -1,17 +1,33 @@
 // The game table: field, players, hand, decisions, feed. Playability comes
 // exclusively from server-sent legal actions.
 
-import React, { useMemo, useState } from "react";
-import { ScrollView, StyleSheet, Text, View } from "react-native";
-import { Btn, CardView, ColorChip, DecisionPrompt, EventFeed, PlayerPanel, theme } from "./components";
+import React, { useEffect, useMemo, useRef, useState } from "react";
+import { Pressable, ScrollView, StyleSheet, Text, View } from "react-native";
+import {
+  Btn,
+  CardDetail,
+  CardView,
+  ColorChip,
+  DecisionPrompt,
+  EventFeed,
+  PlayerPanel,
+  PulsingText,
+  theme,
+  TurnOrderStrip,
+} from "./components";
 import { PlaySheet } from "./PlaySheet";
+import { chime, isMuted, setMuted, setTitleAlert } from "./sound";
 import { useGame } from "./store";
 import type { ActionSpec } from "./types";
+import { shortName } from "./types";
 
 export function Table() {
   const { st, action } = useGame();
   const [sheet, setSheet] = useState<ActionSpec | null>(null);
+  const [inspect, setInspect] = useState<string | null>(null);
   const [confirmConcede, setConfirmConcede] = useState(false);
+  const lastTap = useRef({ card: "", at: 0 });
+  const tapTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const game = st.game!;
   const view = game.view;
   const you = st.session?.you ?? "";
@@ -29,15 +45,59 @@ export function Table() {
   const canDraw = game.legal.some((l) => l.type === "drawCard");
   const canEnd = game.legal.some((l) => l.type === "endTurn");
   const myTurn = view.turn.actingPlayer === you;
+  const myDecision = view.decision !== null;
+  const [muted, setMutedState] = useState(isMuted());
 
-  const tapCard = (cardId: string) => {
+  // chime + tab-title alert when the turn or a decision arrives at you
+  const prevAlert = useRef({ myTurn: false, myDecision: false });
+  useEffect(() => {
+    const prev = prevAlert.current;
+    if (myDecision && !prev.myDecision) chime("decision");
+    else if (myTurn && !prev.myTurn) chime("turn");
+    prevAlert.current = { myTurn, myDecision };
+    setTitleAlert(myTurn || myDecision);
+    return () => setTitleAlert(false);
+  }, [myTurn, myDecision]);
+
+  const playCard = (cardId: string) => {
+    setInspect(null);
     const spec = legalByCard.get(cardId);
-    if (!spec) return;
-    const needs = spec.needs ?? {};
-    const needsInput =
-      needs.targets || needs.chosenColor || needs.attackTarget || (needs.extra && needs.extra.length > 0);
-    if (needsInput) setSheet(spec);
-    else action({ type: "playCard", player: you, card: cardId });
+    if (spec) {
+      const needs = spec.needs ?? {};
+      const needsInput =
+        needs.targets || needs.chosenColor || needs.attackTarget || (needs.extra && needs.extra.length > 0);
+      if (needsInput) setSheet(spec);
+      else action({ type: "playCard", player: you, card: cardId });
+      return;
+    }
+    if (anytimeCards.has(cardId)) action({ type: "anytime", player: you, card: cardId });
+  };
+
+  // single tap: inspect (tap again to dismiss); double tap: play directly.
+  // The single-tap popup is deferred one beat so the second tap of a double
+  // still lands on the card instead of the popup overlay.
+  const tapCard = (cardId: string) => {
+    const playable = legalByCard.has(cardId) || anytimeCards.has(cardId);
+    if (tapTimer.current !== null && lastTap.current.card === cardId) {
+      clearTimeout(tapTimer.current);
+      tapTimer.current = null;
+      lastTap.current = { card: "", at: 0 };
+      if (playable) return playCard(cardId);
+      setInspect((c) => (c === cardId ? null : cardId));
+      return;
+    }
+    if (tapTimer.current !== null) clearTimeout(tapTimer.current);
+    lastTap.current = { card: cardId, at: Date.now() };
+    if (!playable) {
+      // nothing a double tap could do — show the popup immediately
+      tapTimer.current = null;
+      setInspect((c) => (c === cardId ? null : cardId));
+      return;
+    }
+    tapTimer.current = setTimeout(() => {
+      tapTimer.current = null;
+      setInspect((c) => (c === cardId ? null : cardId));
+    }, 250);
   };
 
   return (
@@ -50,12 +110,25 @@ export function Table() {
           <ColorChip color={view.activeColor} size={18} />
           {view.activeNumber !== null ? <Text style={s.turnText}>{fmtNumber(view.activeNumber)}</Text> : null}
           <Text style={s.dim}>deck {view.drawPileCount}</Text>
-          <Text style={s.dim}>{view.turn.direction === 1 ? "⟳" : "⟲"}</Text>
+          <Pressable
+            onPress={() => {
+              setMuted(!muted);
+              setMutedState(!muted);
+            }}
+          >
+            <Text style={s.dim}>{muted ? "🔇" : "🔔"}</Text>
+          </Pressable>
         </View>
-        <Text style={[s.turnText, myTurn && { color: theme.accent }]}>
-          {view.phase === "finished" ? "game over" : myTurn ? "YOUR TURN" : `${view.turn.actingPlayer}'s turn`}
-        </Text>
+        {view.phase !== "finished" && myTurn ? (
+          <PulsingText style={[s.turnText, { color: theme.accent, fontSize: 15 }]}>▶ YOUR TURN</PulsingText>
+        ) : (
+          <Text style={s.turnText}>
+            {view.phase === "finished" ? "game over" : `${shortName(view, view.turn.actingPlayer)}'s turn`}
+          </Text>
+        )}
       </View>
+
+      <TurnOrderStrip view={view} />
 
       <ScrollView contentContainerStyle={{ alignItems: "center", paddingBottom: 12 }}>
         {/* players */}
@@ -75,6 +148,7 @@ export function Table() {
           <DecisionPrompt
             decision={view.decision}
             view={view}
+            deadline={game.deadline}
             onDecide={(choice) =>
               action({ type: "decide", player: you, decisionId: view.decision!.id, choice })
             }
@@ -85,11 +159,11 @@ export function Table() {
         {view.phase === "finished" ? (
           <View style={s.gameOver}>
             <Text style={s.gameOverTitle}>
-              {view.winner === you ? "🏆 You win!" : `Winner: ${view.winner}`}
+              {view.winner === you ? "🏆 You win!" : `Winner: ${view.winner ? shortName(view, view.winner) : "—"}`}
             </Text>
             {view.placements.map((p, i) => (
               <Text key={p} style={s.dim}>
-                {i + 1}. {p === you ? "You" : p}
+                {i + 1}. {p === you ? "You" : shortName(view, p)}
               </Text>
             ))}
           </View>
@@ -106,8 +180,8 @@ export function Table() {
                 <CardView
                   key={`${c}-${i}`}
                   id={c}
-                  onPress={legalByCard.has(c) || anytimeCards.has(c) ? () => tapCard(c) : undefined}
-                  disabled={!legalByCard.has(c) && !anytimeCards.has(c)}
+                  onPress={() => tapCard(c)}
+                  dim={!legalByCard.has(c) && !anytimeCards.has(c)}
                   highlight={legalByCard.has(c)}
                   badge={anytimeCards.has(c) ? "any time" : undefined}
                 />
@@ -132,6 +206,17 @@ export function Table() {
 
         <EventFeed lines={st.feed} />
       </ScrollView>
+
+      {inspect ? (
+        <CardDetail
+          id={inspect}
+          classId={me?.classId ?? null}
+          playable={legalByCard.has(inspect) || anytimeCards.has(inspect)}
+          playLabel={anytimeCards.has(inspect) && !legalByCard.has(inspect) ? "Discard (any time)" : "Play"}
+          onPlay={() => playCard(inspect)}
+          onClose={() => setInspect(null)}
+        />
+      ) : null}
 
       {sheet ? (
         <PlaySheet

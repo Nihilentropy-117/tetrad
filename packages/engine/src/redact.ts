@@ -22,6 +22,7 @@ export interface PlayerView {
   };
   players: Array<{
     id: PlayerId;
+    name: string;
     seat: number;
     classId: string | null;
     hp: number;
@@ -57,6 +58,7 @@ export function redact(s: GameState, viewer: PlayerId): PlayerView {
       const revealed = p.id === viewer || (p.classId !== null && modsFor(s, p.id).revealHand);
       return {
         id: p.id,
+        name: s.config.players.find((c) => c.id === p.id)?.name ?? p.id,
         seat: p.seat,
         classId: s.phase === "classSelect" ? (p.id === viewer ? p.pendingClass : null) : p.classId,
         hp: p.hp,

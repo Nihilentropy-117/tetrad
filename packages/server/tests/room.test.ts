@@ -102,6 +102,23 @@ describe("Room", () => {
     expect(room.snapshot!.players[0].hand.length).toBe(handBefore + 1);
   });
 
+  it("sends a decision deadline only to the deciding player, and names in the view", () => {
+    const { room, conns, tokens } = mkRoom(["scout", "zerker"]);
+    // names flow through redaction
+    const v = conns[0].last("state")!;
+    expect(v.view.players.map((p) => p.name)).toEqual(["P0", "P1"]);
+    // trigger a pending decision (Scout draw → scoutReturn)
+    room.handleAction(tokens[0], { type: "drawCard", player: "p0" });
+    expect(room.snapshot!.pending?.decision.player).toBe("p0");
+    const s0 = conns[0].last("state")!;
+    const s1 = conns[1].last("state")!;
+    expect(s0.view.decision).toBeTruthy();
+    expect(typeof s0.deadline).toBe("number");
+    expect(s0.deadline!).toBeGreaterThan(Date.now() - 1000);
+    expect(s1.view.decision).toBeNull();
+    expect(s1.deadline).toBeUndefined();
+  });
+
   it("reconnect delivers the current redacted view without replay", () => {
     const { room, conns, tokens } = mkRoom(["zerker", "priest"]);
     room.disconnect(conns[0]);

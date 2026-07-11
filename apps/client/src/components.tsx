@@ -1,10 +1,10 @@
 // Shared presentational pieces: buttons, cards, player panels, event feed,
 // decision prompt. Everything renders server-provided data verbatim.
 
-import React, { useState } from "react";
-import { Pressable, ScrollView, StyleSheet, Text, View } from "react-native";
+import React, { useEffect, useRef, useState } from "react";
+import { Animated, Pressable, ScrollView, StyleSheet, Text, View } from "react-native";
 import type { DecisionRequest, PlayerView } from "./types";
-import { cardInfo, COLOR_HEX, playerName } from "./types";
+import { cardHelp, cardInfo, CLASS_META, COLOR_HEX, playerName } from "./types";
 
 export const theme = {
   bg: "#10151f",
@@ -63,6 +63,7 @@ export function CardView({
   id,
   onPress,
   disabled,
+  dim,
   highlight,
   small,
   badge,
@@ -70,6 +71,8 @@ export function CardView({
   id: string;
   onPress?: () => void;
   disabled?: boolean;
+  /** faded but still pressable (e.g. inspectable-but-unplayable hand cards) */
+  dim?: boolean;
   highlight?: boolean;
   small?: boolean;
   badge?: string;
@@ -93,7 +96,7 @@ export function CardView({
           margin: 3,
           borderWidth: highlight ? 3 : 1,
           borderColor: highlight ? "#fff" : "rgba(0,0,0,0.35)",
-          opacity: disabled ? 0.35 : 1,
+          opacity: disabled ? 0.35 : dim ? 0.5 : 1,
         },
         pressed && { transform: [{ translateY: -4 }] },
       ]}
@@ -148,7 +151,7 @@ export function PlayerPanel({
   selected?: boolean;
 }) {
   const active = view.turn.activePlayer === p.id;
-  const meta = p.classId ?? "?";
+  const meta = p.classId ? (CLASS_META[p.classId]?.name ?? p.classId) : "?";
   return (
     <Pressable
       onPress={onPress}
@@ -161,9 +164,9 @@ export function PlayerPanel({
       ]}
     >
       <View style={{ flexDirection: "row", alignItems: "center", gap: 6 }}>
-        {p.classId ? <ColorChip color={(cardInfoColorOf(meta) ?? "red") as string} /> : null}
+        {p.classId ? <ColorChip color={CLASS_META[p.classId]?.color ?? "red"} /> : null}
         <Text style={s.panelTitle}>
-          {isYou ? "You" : p.id} · {meta}
+          {isYou ? "You" : p.name || p.id} · {meta}
         </Text>
         {view.turn.actingPlayer === p.id && view.turn.actingPlayer !== view.turn.activePlayer ? (
           <Text style={{ color: theme.accent, fontSize: 10 }}>puppeteer</Text>
@@ -178,30 +181,142 @@ export function PlayerPanel({
   );
 }
 
-// class → display color without importing engine data
-function cardInfoColorOf(classId: string): string | null {
-  const map: Record<string, string> = {
-    zerker: "red",
-    knight: "red",
-    warlock: "blue",
-    sorcerer: "blue",
-    thief: "green",
-    scout: "green",
-    priest: "yellow",
-    paladin: "yellow",
-  };
-  return map[classId] ?? null;
+/** Slow opacity pulse — used for the YOUR TURN banner. */
+export function PulsingText({ children, style }: { children: React.ReactNode; style?: object | object[] }) {
+  const v = useRef(new Animated.Value(1)).current;
+  useEffect(() => {
+    const loop = Animated.loop(
+      Animated.sequence([
+        Animated.timing(v, { toValue: 0.35, duration: 650, useNativeDriver: false }),
+        Animated.timing(v, { toValue: 1, duration: 650, useNativeDriver: false }),
+      ])
+    );
+    loop.start();
+    return () => loop.stop();
+  }, [v]);
+  return <Animated.Text style={[style, { opacity: v }]}>{children}</Animated.Text>;
+}
+
+/** Play order at a glance: seats in flow direction, acting player highlighted,
+ * dead/won players struck through, plus who's up next. Presentation only —
+ * derived from the server view. */
+export function TurnOrderStrip({ view }: { view: PlayerView }) {
+  const ordered = [...view.players].sort((a, b) => a.seat - b.seat);
+  const seq = view.turn.direction === 1 ? ordered : [...ordered].reverse();
+  const acting = view.turn.actingPlayer;
+  const alive = seq.filter((p) => p.status === "active");
+  const activeIdx = alive.findIndex((p) => p.id === view.turn.activePlayer);
+  const next = alive.length > 1 && activeIdx >= 0 ? alive[(activeIdx + 1) % alive.length] : null;
+  return (
+    <View style={s.orderStrip}>
+      <Text style={s.orderLabel}>play order</Text>
+      {seq.map((p, i) => (
+        <React.Fragment key={p.id}>
+          {i > 0 ? <Text style={s.orderArrow}>➜</Text> : null}
+          <Text
+            style={[
+              s.orderName,
+              p.id === acting && s.orderActive,
+              p.status !== "active" && { textDecorationLine: "line-through", opacity: 0.45 },
+            ]}
+          >
+            {p.name || p.id}
+          </Text>
+        </React.Fragment>
+      ))}
+      <Text style={s.orderArrow}>↩</Text>
+      {next ? (
+        <Text style={s.orderNext}>
+          next: <Text style={{ color: theme.text, fontWeight: "700" }}>{next.id === view.you ? "You" : next.name || next.id}</Text>
+        </Text>
+      ) : null}
+    </View>
+  );
+}
+
+/** Card inspector: what the card is, what it does, and (if it would fire)
+ * your class ability. Tap-to-inspect opens this; "Play" routes to the normal
+ * play flow when the server says the card is playable. */
+export function CardDetail({
+  id,
+  classId,
+  playable,
+  playLabel = "Play",
+  onPlay,
+  onClose,
+}: {
+  id: string;
+  classId: string | null;
+  playable: boolean;
+  playLabel?: string;
+  onPlay: () => void;
+  onClose: () => void;
+}) {
+  const info = cardInfo(id);
+  const help = cardHelp(id, classId);
+  return (
+    <Pressable style={s.detailOverlay} onPress={onClose}>
+      <Pressable style={s.detailBox} onPress={() => {}}>
+        <View style={{ flexDirection: "row", gap: 12, alignItems: "center" }}>
+          <CardView id={id} />
+          <View style={{ flex: 1 }}>
+            <Text style={s.detailTitle}>
+              {(info.color ?? "wild").toUpperCase()} {info.label}
+            </Text>
+            <Text style={s.detailText}>{help.generic}</Text>
+          </View>
+        </View>
+        {help.ability ? (
+          <View style={s.detailAbility}>
+            <Text style={s.detailAbilityName}>✦ Your ability: {help.ability.name}</Text>
+            <Text style={s.detailText}>{help.ability.text}</Text>
+          </View>
+        ) : null}
+        {!playable ? <Text style={[s.detailText, { color: theme.dim }]}>Not playable right now.</Text> : null}
+        <View style={{ flexDirection: "row", gap: 8, justifyContent: "center", marginTop: 12 }}>
+          {playable ? <Btn label={playLabel} kind="primary" onPress={onPlay} /> : null}
+          <Btn label="Close" kind="ghost" onPress={onClose} />
+        </View>
+      </Pressable>
+    </Pressable>
+  );
+}
+
+/** Heuristic line coloring: damage red, healing green, rolls gold, turn
+ * markers accent. Keeps the log scannable without structured events. */
+function feedLineColor(l: string): string {
+  if (l.startsWith("—")) return theme.accent;
+  if (/☠|has fallen| hit .* for /.test(l)) return "#ff9d9d";
+  if (/✚|healed|returns at/.test(l)) return "#7fd6a4";
+  if (/rolled|save vs/.test(l)) return "#d8c27a";
+  if (/^[Yy]ou /.test(l)) return theme.text;
+  return theme.dim;
 }
 
 export function EventFeed({ lines }: { lines: string[] }) {
+  const [expanded, setExpanded] = useState(false);
   return (
-    <ScrollView style={s.feed} contentContainerStyle={{ padding: 8 }}>
-      {[...lines].reverse().map((l, i) => (
-        <Text key={`${lines.length - i}`} style={[s.feedLine, i === 0 && { color: theme.text }]}>
-          {l}
-        </Text>
-      ))}
-    </ScrollView>
+    <View style={s.feedWrap}>
+      <Pressable onPress={() => setExpanded(!expanded)} style={s.feedHeader}>
+        <Text style={s.feedTitle}>COMBAT LOG</Text>
+        <Text style={s.dimSmall}>{expanded ? "▾ collapse" : "▸ expand"}</Text>
+      </Pressable>
+      <ScrollView style={[s.feed, { maxHeight: expanded ? 440 : 190 }]} contentContainerStyle={{ padding: 10 }}>
+        {[...lines].reverse().map((l, i) => (
+          <Text
+            key={`${lines.length - i}`}
+            style={[
+              s.feedLine,
+              { color: feedLineColor(l) },
+              l.startsWith("—") && s.feedTurnSep,
+              i === 0 && { fontWeight: "700" },
+            ]}
+          >
+            {l}
+          </Text>
+        ))}
+      </ScrollView>
+    </View>
   );
 }
 
@@ -213,13 +328,40 @@ export function EventFeed({ lines }: { lines: string[] }) {
  * Exotic structured decisions fall back to "accept default" (the server times
  * out to the default anyway).
  */
+/** Live countdown to a deadline (epoch ms). Renders a bar + seconds left. */
+function Countdown({ deadline }: { deadline: number }) {
+  const [now, setNow] = useState(Date.now());
+  useEffect(() => {
+    const h = setInterval(() => setNow(Date.now()), 250);
+    return () => clearInterval(h);
+  }, [deadline]);
+  const left = Math.max(0, deadline - now);
+  const secs = Math.ceil(left / 1000);
+  // total is unknown client-side; scale the bar against the first-seen remainder
+  const [total] = useState(left);
+  const pct = total > 0 ? Math.min(1, left / total) : 0;
+  const urgent = secs <= 5;
+  return (
+    <View style={{ marginBottom: 8 }}>
+      <View style={s.cdOuter}>
+        <View style={[s.cdInner, { width: `${pct * 100}%`, backgroundColor: urgent ? theme.danger : theme.accent }]} />
+      </View>
+      <Text style={[s.cdText, urgent && { color: theme.danger, fontWeight: "800" }]}>
+        {secs}s — picks the default if time runs out
+      </Text>
+    </View>
+  );
+}
+
 export function DecisionPrompt({
   decision,
   view,
+  deadline,
   onDecide,
 }: {
   decision: DecisionRequest;
   view: PlayerView;
+  deadline?: number;
   onDecide: (choice: unknown) => void;
 }) {
   const [picked, setPicked] = useState<unknown[]>([]);
@@ -227,22 +369,27 @@ export function DecisionPrompt({
   const wantsMany = Array.isArray(decision.default);
   const wantCount = wantsMany ? (decision.default as unknown[]).length : 1;
 
-  const renderOpt = (o: unknown) => {
-    const label =
-      typeof o === "string" && /-(\d|stun|counter|rally|advantage|inspiration|0)/.test(o)
-        ? `${cardInfo(o).color ?? "wild"} ${cardInfo(o).label}`
-        : typeof o === "string" && view.players.some((p) => p.id === o)
-          ? playerName(view, o)
-          : String(o);
+  const renderOpt = (o: unknown, i: number) => {
+    const isCard = typeof o === "string" && /^(red|blue|green|yellow|wild)-/.test(o);
     const idx = picked.indexOf(o);
+    const toggle = () => {
+      if (!wantsMany) return onDecide(o);
+      if (idx >= 0) setPicked(picked.filter((x) => x !== o));
+      else if (picked.length < wantCount) setPicked([...picked, o]);
+    };
+    if (isCard) {
+      return (
+        <View key={`${String(o)}-${i}`} style={{ alignItems: "center" }}>
+          <CardView id={o as string} onPress={toggle} highlight={idx >= 0} badge={idx >= 0 ? `pick ${idx + 1}` : undefined} />
+        </View>
+      );
+    }
+    const label =
+      typeof o === "string" && view.players.some((p) => p.id === o) ? playerName(view, o) : String(o);
     return (
       <Pressable
-        key={String(o)}
-        onPress={() => {
-          if (!wantsMany) return onDecide(o);
-          if (idx >= 0) setPicked(picked.filter((x) => x !== o));
-          else if (picked.length < wantCount) setPicked([...picked, o]);
-        }}
+        key={`${String(o)}-${i}`}
+        onPress={toggle}
         style={[s.opt, idx >= 0 && { borderColor: "#fff", backgroundColor: theme.panelHi }]}
       >
         <Text style={{ color: theme.text }}>
@@ -256,6 +403,7 @@ export function DecisionPrompt({
   const isBoolean = typeof decision.default === "boolean";
   return (
     <View style={s.decision}>
+      {deadline ? <Countdown key={deadline} deadline={deadline} /> : null}
       <Text style={s.decisionTitle}>{decision.prompt}</Text>
       {opts && opts.length > 0 ? (
         <View style={{ flexDirection: "row", flexWrap: "wrap", gap: 6, justifyContent: "center" }}>
@@ -322,8 +470,74 @@ const s = StyleSheet.create({
   },
   panelTitle: { color: theme.text, fontWeight: "700", fontSize: 13 },
   dimSmall: { color: theme.dim, fontSize: 11 },
-  feed: { backgroundColor: "#0c1017", borderRadius: 8, maxHeight: 140 },
-  feedLine: { color: theme.dim, fontSize: 11, marginBottom: 2 },
+  feedWrap: { width: "100%", maxWidth: 720, paddingHorizontal: 8, marginTop: 4 },
+  feedHeader: {
+    flexDirection: "row",
+    justifyContent: "space-between",
+    alignItems: "center",
+    paddingHorizontal: 4,
+    paddingVertical: 4,
+  },
+  feedTitle: { color: theme.dim, fontSize: 11, fontWeight: "800", letterSpacing: 1.5 },
+  feed: { backgroundColor: "#0c1017", borderRadius: 8, borderWidth: 1, borderColor: theme.line },
+  orderStrip: {
+    flexDirection: "row",
+    flexWrap: "wrap",
+    alignItems: "center",
+    justifyContent: "center",
+    gap: 6,
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+    borderBottomWidth: 1,
+    borderBottomColor: theme.line,
+  },
+  orderLabel: { color: theme.dim, fontSize: 10, textTransform: "uppercase", letterSpacing: 1, marginRight: 4 },
+  orderName: { color: theme.dim, fontSize: 12, fontWeight: "600" },
+  orderActive: { color: theme.accent, fontWeight: "900", fontSize: 13 },
+  orderArrow: { color: theme.accent, fontSize: 12 },
+  orderNext: { color: theme.dim, fontSize: 12, marginLeft: 8 },
+  detailOverlay: {
+    position: "absolute",
+    left: 0,
+    right: 0,
+    top: 0,
+    bottom: 0,
+    backgroundColor: "rgba(6,9,14,0.82)",
+    justifyContent: "center",
+    alignItems: "center",
+    zIndex: 40,
+  },
+  detailBox: {
+    backgroundColor: theme.panel,
+    borderRadius: 14,
+    borderWidth: 1,
+    borderColor: theme.line,
+    padding: 16,
+    maxWidth: 440,
+    width: "92%",
+    gap: 8,
+  },
+  detailTitle: { color: theme.text, fontSize: 17, fontWeight: "800", marginBottom: 4 },
+  detailText: { color: theme.text, fontSize: 13, lineHeight: 19 },
+  detailAbility: {
+    backgroundColor: theme.panelHi,
+    borderRadius: 10,
+    padding: 10,
+    borderLeftWidth: 3,
+    borderLeftColor: theme.accent,
+  },
+  detailAbilityName: { color: theme.accent, fontWeight: "800", fontSize: 13, marginBottom: 3 },
+  cdOuter: { height: 6, backgroundColor: "#0c1017", borderRadius: 3, overflow: "hidden" },
+  cdInner: { position: "absolute", left: 0, top: 0, bottom: 0 },
+  cdText: { color: theme.dim, fontSize: 11, textAlign: "center", marginTop: 3 },
+  feedLine: { color: theme.dim, fontSize: 12.5, lineHeight: 19, marginBottom: 2 },
+  feedTurnSep: {
+    borderTopWidth: 1,
+    borderTopColor: theme.line,
+    paddingTop: 6,
+    marginTop: 4,
+    fontWeight: "700",
+  },
   decision: {
     backgroundColor: theme.panelHi,
     borderColor: theme.accent,
