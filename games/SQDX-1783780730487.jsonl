@@ -1,0 +1,17 @@
+{"header":true,"seed":"9f6ff48d-b6c5-4f4c-9b64-61e08a743318","config":{"mode":"ffa","players":[{"id":"p0","name":"Gray"},{"id":"p1","name":"Nihil"}],"dealerSeat":1}}
+{"type":"chooseClass","player":"p0","classId":"zerker"}
+{"type":"chooseClass","player":"p1","classId":"paladin"}
+{"type":"playCard","player":"p0","card":"green-7-a"}
+{"type":"playCard","player":"p1","card":"green-5-b"}
+{"type":"playCard","player":"p0","card":"red-5-b","targets":["p1"]}
+{"type":"drawCard","player":"p1"}
+{"type":"playCard","player":"p1","card":"red-6-a"}
+{"type":"playCard","player":"p0","card":"red-1-a"}
+{"type":"drawCard","player":"p1"}
+{"type":"playCard","player":"p1","card":"red-stun-b"}
+{"type":"playCard","player":"p1","card":"green-stun-a"}
+{"type":"playCard","player":"p1","card":"green-stun-b"}
+{"type":"playCard","player":"p1","card":"green-1-a"}
+{"type":"playCard","player":"p0","card":"green-counter-a"}
+{"type":"drawCard","player":"p1"}
+{"type":"playCard","player":"p1","card":"wild-advantage-c","targets":["p0"],"chosenColor":"blue","attackTarget":"p0"}

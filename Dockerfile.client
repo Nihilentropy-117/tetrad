@@ -1,0 +1,18 @@
+FROM node:20-alpine AS build
+
+WORKDIR /app
+ENV CI=1
+ENV EXPO_NO_TELEMETRY=1
+
+COPY package.json package-lock.json ./
+COPY packages/engine/package.json packages/engine/
+COPY apps/client/package.json apps/client/
+RUN npm ci --workspace=@tetrad/engine --workspace=@tetrad/client
+
+COPY packages/engine packages/engine
+COPY apps/client apps/client
+RUN npm run build:web --workspace=@tetrad/client
+
+FROM nginx:alpine
+COPY --from=build /app/apps/client/dist /usr/share/nginx/html
+EXPOSE 80

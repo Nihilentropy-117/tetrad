@@ -1,0 +1,33 @@
+services:
+  server:
+    build:
+      context: .
+      dockerfile: Dockerfile.server
+    image: tetrad-server:local
+    ports:
+      - "8080:8080"
+    volumes:
+      - games:/app/games
+    restart: unless-stopped
+
+  client-a:
+    build:
+      context: .
+      dockerfile: Dockerfile.client
+    image: tetrad-client:local
+    ports:
+      - "3001:80"
+    depends_on:
+      - server
+    restart: unless-stopped
+
+  client-b:
+    image: tetrad-client:local
+    ports:
+      - "3002:80"
+    depends_on:
+      - client-a
+    restart: unless-stopped
+
+volumes:
+  games:

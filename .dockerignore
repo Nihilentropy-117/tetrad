@@ -1,0 +1,9 @@
+node_modules
+**/node_modules
+games
+apps/client/dist
+apps/client/.expo
+*.docx
+.git
+Dockerfile.*
+docker-compose.yml

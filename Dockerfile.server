@@ -1,0 +1,18 @@
+FROM node:20-alpine
+
+WORKDIR /app
+
+COPY package.json package-lock.json ./
+COPY packages/engine/package.json packages/engine/
+COPY packages/server/package.json packages/server/
+RUN npm ci --workspace=@tetrad/engine --workspace=@tetrad/server
+
+COPY packages/engine packages/engine
+COPY packages/server packages/server
+
+ENV PORT=8080
+ENV TETRAD_LOG_DIR=/app/games
+RUN mkdir -p /app/games
+
+EXPOSE 8080
+CMD ["npx", "tsx", "packages/server/src/main.ts"]

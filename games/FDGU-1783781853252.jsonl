@@ -1,0 +1,4 @@
+{"header":true,"seed":"8ff5d1b2-4908-420b-8c37-c6a4dbe4463d","config":{"mode":"ffa","players":[{"id":"p0","name":"nathan"},{"id":"p1","name":"Gray"}],"dealerSeat":1}}
+{"type":"chooseClass","player":"p1","classId":"thief"}
+{"type":"chooseClass","player":"p0","classId":"knight"}
+{"type":"decide","player":"p1","decisionId":"d1","choice":"red"}
