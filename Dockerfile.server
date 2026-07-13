@@ -10,6 +10,12 @@ RUN npm ci --workspace=@tetrad/engine --workspace=@tetrad/server
 COPY packages/engine packages/engine
 COPY packages/server packages/server
 
+# bot-client (not a workspace member) so the server can spawn bots for the
+# lobby's "Add bot" button; needs OPENROUTER_API_KEY in the environment
+COPY bot-client/package.json bot-client/package-lock.json bot-client/
+RUN npm ci --prefix bot-client
+COPY bot-client bot-client
+
 ENV PORT=8080
 ENV TETRAD_LOG_DIR=/app/games
 RUN mkdir -p /app/games
