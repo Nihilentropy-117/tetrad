@@ -6,6 +6,7 @@
 //        --name <display name>, --server <ws url>, --log-dir <dir>.
 
 import { Agent } from "./agent.js";
+import { green } from "./colors.js";
 import { GameLog } from "./gamelog.js";
 import { Session } from "./net.js";
 import { SYSTEM_PROMPT } from "./rules.js";
@@ -47,7 +48,7 @@ const session: Session = new Session(server, code, name, {
     }
     agent.onState(msg);
   },
-  onLobby: (players) => console.log(`Lobby [${session.code ?? code}]: ${players.join(", ")} (waiting for host to start)`),
+  onLobby: (players) => console.log(green(`Lobby [${session.code ?? code}]: ${players.join(", ")} (waiting for host to start)`)),
   onError: (c, m) => {
     if (agent) agent.onServerError(c, m);
     else fail(`Server error while joining: ${c}: ${m}`);

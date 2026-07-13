@@ -3,9 +3,10 @@
 // message, then a safe fallback so the game never stalls (pending decisions
 // auto-resolve server-side at ~45s, so timeliness matters).
 
+import { blue, dim, green, orange } from "./colors.js";
 import { GameLog } from "./gamelog.js";
 import { chat, parseReply, type BotReply, type ChatMessage, type LlmConfig, LlmError } from "./llm.js";
-import { renderState } from "./prompt.js";
+import { fmtEvent, renderState } from "./prompt.js";
 import { SYSTEM_PROMPT } from "./rules.js";
 import type { Session } from "./net.js";
 import type { Action, Color, GameEvent, PlayerId, StateMsg } from "./types.js";
@@ -61,7 +62,7 @@ export class Agent {
           if (m.version <= this.lastHandled) continue;
           this.lastHandled = m.version;
           this.eventBuffer.push(...m.events);
-          for (const line of printableEvents(m.events)) console.log(`  ${line}`);
+          for (const line of eventLines(m)) console.log(`  ${line}`);
           msg = m;
         }
         if (msg) await this.handle(msg);
@@ -112,8 +113,8 @@ export class Agent {
       try {
         const reply = parseReply(raw);
         const action = this.buildAction(msg, reply);
-        if (reply.reasoning) console.log(`[${this.llm.model}] ${reply.reasoning}`);
-        console.log(`-> ${JSON.stringify(action)}`);
+        if (reply.reasoning) console.log(blue(`[${this.llm.model}] ${reply.reasoning}`));
+        console.log(orange(`-> ${JSON.stringify(action)}`));
         const outcome = await this.submit(action);
         if (outcome.ok) return;
         failure = `The server rejected that action — ${outcome.message}.`;
@@ -129,7 +130,7 @@ export class Agent {
 
     const fallback = this.fallbackAction(msg);
     if (fallback) {
-      console.error(`[fallback] ${JSON.stringify(fallback)}`);
+      console.error(orange(`[fallback] ${JSON.stringify(fallback)}`));
       this.log.append("user", `(bot-client fallback: submitted ${JSON.stringify(fallback)})`);
       await this.submit(fallback);
     } else {
@@ -234,12 +235,18 @@ function asColor(v: unknown, field: string): Color {
   throw new LlmError(`this action needs "${field}" (one of ${COLORS.join("/")})`);
 }
 
-/** Console lines for a batch of events: raw type + key fields. */
-function printableEvents(events: GameEvent[]): string[] {
-  return events
-    .filter((e) => !["DecisionRequested", "TurnEnded"].includes(e.type))
-    .map((e) => {
-      const { type, private: _p, ...rest } = e;
-      return `${type} ${JSON.stringify(rest)}`;
-    });
+/** Console lines for one state's events: human-readable, colored by actor —
+ * green for the humans, orange for the bot, dim for neutral bookkeeping. */
+function eventLines(msg: StateMsg): string[] {
+  const you = msg.view.you;
+  const lines: string[] = [];
+  for (const e of msg.events) {
+    const text = fmtEvent(e, msg.view);
+    if (text === null) continue;
+    const subject = e.player ?? e.src ?? e.roller ?? e.by ?? e.attacker ?? e.owner ?? e.target ?? e.a;
+    if (subject === undefined) lines.push(dim(text));
+    else if (subject === you) lines.push(orange(text));
+    else lines.push(green(text));
+  }
+  return lines;
 }

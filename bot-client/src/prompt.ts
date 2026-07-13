@@ -55,7 +55,7 @@ function describeSpec(spec: ActionSpec, view: PlayerView): string {
 }
 
 /** Human line for an event; null = skip (noise). Trimmed mirror of the UI's fmtEvent. */
-function fmtEvent(e: GameEvent, view: PlayerView): string | null {
+export function fmtEvent(e: GameEvent, view: PlayerView): string | null {
   const p = (id: unknown) => (id === view.you ? "YOU" : playerLabel(view, String(id)));
   switch (e.type) {
     case "TurnStarted":
