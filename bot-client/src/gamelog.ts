@@ -29,8 +29,10 @@ export class GameLog {
   /** Start a fresh log; called once the room code is known. */
   begin(roomCode: string, systemPrompt: string): void {
     fs.mkdirSync(this.dir, { recursive: true });
+    // pid suffix: two bots spawned in the same millisecond (e.g. via the
+    // spawner) must not collide on the same file
     const stamp = new Date().toISOString().replace(/[:.]/g, "-");
-    this.file = path.join(this.dir, `${roomCode}-${stamp}.json`);
+    this.file = path.join(this.dir, `${roomCode}-${stamp}-${process.pid}.json`);
     this.messages = [{ role: "system", content: systemPrompt }];
     this.totals = { llmCalls: 0, tokensIn: 0, tokensOut: 0 };
     this.flush();

@@ -20,10 +20,9 @@ const MAX_BOTS_PER_ROOM = 3;
 
 const DEFAULT_MODELS = [
   "openai/gpt-5.6-sol",
-  "anthropic/claude-sonnet-5",
-  "anthropic/claude-haiku-4.5",
-  "openai/gpt-4o-mini",
   "tencent/hy3:free",
+  "nvidia/nemotron-3-super-120b-a12b:free",
+  "openai/gpt-oss-120b:free",
 ];
 const MODELS = (process.env.BOT_MODELS?.split(",").map((s) => s.trim()).filter(Boolean) ?? DEFAULT_MODELS);
 
