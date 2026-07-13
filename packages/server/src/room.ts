@@ -164,6 +164,25 @@ export class Room {
     this.broadcastLobby();
   }
 
+  /** Host-only pre-start gate for spawning a bot; sends the error itself. */
+  canAddBot(token: string): boolean {
+    const seat = this.seats.find((s) => s.token === token);
+    if (!seat) return false;
+    if (seat !== this.seats[0]) {
+      seat.conn?.send({ t: "error", code: "notHost", message: "only the host can add bots" });
+      return false;
+    }
+    if (this.started) {
+      seat.conn?.send({ t: "error", code: "started", message: "cannot add bots after the game started" });
+      return false;
+    }
+    if (this.seats.length >= this.maxPlayers) {
+      seat.conn?.send({ t: "error", code: "full", message: "room is full" });
+      return false;
+    }
+    return true;
+  }
+
   start(token: string): void {
     const seat = this.seats.find((s) => s.token === token);
     if (!seat) return;

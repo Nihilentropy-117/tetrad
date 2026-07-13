@@ -20,6 +20,8 @@ export interface ClientState {
   game: StateMsg | null;
   feed: string[];
   error: string | null;
+  /** bot model dropdown contents, served by the game server on listBotModels */
+  botModels: string[] | null;
 }
 
 const initial: ClientState = {
@@ -30,6 +32,7 @@ const initial: ClientState = {
   game: null,
   feed: [],
   error: null,
+  botModels: null,
 };
 
 type Ev =
@@ -67,6 +70,8 @@ function reducer(st: ClientState, ev: Ev): ClientState {
             .filter((x): x is string => x !== null);
           return { ...st, game: m, feed: [...st.feed, ...lines].slice(-120), error: null };
         }
+        case "botModels":
+          return { ...st, botModels: m.models };
         case "error":
           return { ...st, error: `${m.code}: ${m.message}` };
         default:
@@ -130,6 +135,8 @@ export interface GameApi {
   rejoin(session: Session): void;
   start(): void;
   recuse(spectate: boolean): void;
+  listBotModels(): void;
+  addBot(model: string, instructions?: string): void;
   action(a: Action): void;
   leave(): void;
 }
@@ -178,6 +185,8 @@ export function GameProvider({ children }: { children: React.ReactNode }) {
       rejoin: (s) => open(s.url, { t: "rejoin", code: s.code, token: s.token }),
       start: () => send({ t: "start" }),
       recuse: (spectate) => send({ t: "recuse", spectate }),
+      listBotModels: () => send({ t: "listBotModels" }),
+      addBot: (model, instructions) => send({ t: "addBot", model, instructions }),
       action: (a) => send({ t: "action", action: a }),
       leave: () => {
         clearSession();

@@ -9,6 +9,8 @@ export type ClientMsg =
   | { t: "rejoin"; code: string; token: string }
   | { t: "start" } // host only
   | { t: "recuse"; spectate: boolean } // host only, pre-start: sit out and watch
+  | { t: "listBotModels" }
+  | { t: "addBot"; model: string; instructions?: string } // host only, pre-start
   | { t: "action"; action: Action }
   | { t: "ping" };
 
@@ -32,5 +34,6 @@ export type ServerMsg =
       /** epoch ms when the pending decision auto-resolves to its default */
       deadline?: number;
     }
+  | { t: "botModels"; models: string[] }
   | { t: "error"; code: string; message: string }
   | { t: "pong" };

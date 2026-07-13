@@ -6,17 +6,6 @@ import { Btn, ColorChip, theme } from "./components";
 import { defaultServerUrl, loadSession, useGame } from "./store";
 import { ABILITY_TEXT, CLASS_META } from "./types";
 
-/** The bot spawner (bot-client `npm run spawner`) listens on the game server's
- * host at this port and launches bot processes on request. */
-function spawnerUrl(serverUrl: string): string {
-  try {
-    const u = new URL(serverUrl);
-    return `http://${u.hostname}:8090`;
-  } catch {
-    return "http://localhost:8090";
-  }
-}
-
 export function ConnectScreen() {
   const { st, create, join, rejoin } = useGame();
   const [url, setUrl] = useState(defaultServerUrl());
@@ -122,58 +111,32 @@ export function LobbyScreen() {
         ) : null}
         {st.error ? <Text style={s.error}>⚠ {st.error}</Text> : null}
       </View>
-      {addingBot && st.session ? (
-        <AddBotModal code={lobby.code} serverUrl={st.session.url} onClose={() => setAddingBot(false)} />
-      ) : null}
+      {addingBot ? <AddBotModal onClose={() => setAddingBot(false)} /> : null}
     </View>
   );
 }
 
-/** Popup for spawning a bot: model dropdown (list served by the bot spawner)
+/** Popup for spawning a bot: model dropdown (list served by the game server)
  * plus free-text instructions appended to the bot's system prompt. */
-function AddBotModal({ code, serverUrl, onClose }: { code: string; serverUrl: string; onClose: () => void }) {
-  const base = spawnerUrl(serverUrl);
-  const [models, setModels] = useState<string[] | null>(null);
+function AddBotModal({ onClose }: { onClose: () => void }) {
+  const { st, listBotModels, addBot } = useGame();
+  const models = st.botModels;
   const [model, setModel] = useState<string | null>(null);
   const [open, setOpen] = useState(false);
   const [instructions, setInstructions] = useState("");
-  const [busy, setBusy] = useState(false);
-  const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
-    let alive = true;
-    fetch(`${base}/models`)
-      .then((r) => r.json())
-      .then((d: { models: string[] }) => {
-        if (!alive) return;
-        setModels(d.models);
-        setModel(d.models[0] ?? null);
-      })
-      .catch(() => {
-        if (alive) setError("bot spawner not reachable — run `npm run spawner` in bot-client/");
-      });
-    return () => {
-      alive = false;
-    };
-  }, [base]);
+    listBotModels();
+  }, [listBotModels]);
+  useEffect(() => {
+    if (model === null && models?.length) setModel(models[0]);
+  }, [models, model]);
 
   const add = () => {
     if (!model) return;
-    setBusy(true);
-    setError(null);
-    fetch(`${base}/spawn`, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ code, model, instructions: instructions.trim() || undefined, server: serverUrl }),
-    })
-      .then(async (r) => {
-        if (!r.ok) throw new Error((await r.json().catch(() => null))?.error ?? `HTTP ${r.status}`);
-        onClose(); // the bot appears in the lobby when it joins
-      })
-      .catch((e: Error) => {
-        setBusy(false);
-        setError(e.message);
-      });
+    addBot(model, instructions.trim() || undefined);
+    // the bot appears in the lobby when it joins; server errors land in st.error
+    onClose();
   };
 
   return (
@@ -212,10 +175,9 @@ function AddBotModal({ code, serverUrl, onClose }: { code: string; serverUrl: st
           multiline
         />
         <View style={s.row}>
-          <Btn label={busy ? "Adding…" : "Add"} kind="primary" disabled={!model || busy} onPress={add} />
+          <Btn label="Add" kind="primary" disabled={!model} onPress={add} />
           <Btn label="Cancel" kind="ghost" onPress={onClose} />
         </View>
-        {error ? <Text style={s.error}>⚠ {error}</Text> : null}
       </Pressable>
     </Pressable>
   );

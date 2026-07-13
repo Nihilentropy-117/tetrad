@@ -5,6 +5,7 @@ import { randomUUID } from "node:crypto";
 import { appendFileSync, mkdirSync } from "node:fs";
 import { join } from "node:path";
 import { WebSocketServer, type WebSocket } from "ws";
+import { BOT_MODELS, spawnBot, type SpawnBotFn } from "./bots.js";
 import type { ClientMsg, ServerMsg } from "./protocol.js";
 import { Room, type Conn } from "./room.js";
 
@@ -13,6 +14,8 @@ export interface ServerOptions {
   /** directory for JSONL action logs; omit to disable persistence */
   logDir?: string;
   decisionTimeoutMs?: number;
+  /** injected so tests don't launch real bot processes */
+  spawnBot?: SpawnBotFn;
 }
 
 const CODE_ALPHABET = "ABCDEFGHJKMNPQRSTUVWXYZ"; // no I/L/O
@@ -98,6 +101,28 @@ export function startServer(opts: ServerOptions): { wss: WebSocketServer; close(
           case "recuse":
             bound?.room.recuse(bound.token, msg.spectate === true);
             return;
+          case "listBotModels":
+            conn.send({ t: "botModels", models: BOT_MODELS });
+            return;
+          case "addBot": {
+            if (!bound) {
+              conn.send({ t: "error", code: "noRoom", message: "join a room first" });
+              return;
+            }
+            if (typeof msg.model !== "string" || !msg.model) {
+              conn.send({ t: "error", code: "badModel", message: "model is required" });
+              return;
+            }
+            if (!bound.room.canAddBot(bound.token)) return;
+            const err = (opts.spawnBot ?? spawnBot)({
+              code: bound.room.code,
+              model: msg.model,
+              instructions: msg.instructions,
+              serverUrl: `ws://127.0.0.1:${opts.port}`,
+            });
+            if (err) conn.send({ t: "error", code: "botSpawn", message: err });
+            return;
+          }
           case "action":
             bound?.room.handleAction(bound.token, msg.action);
             return;

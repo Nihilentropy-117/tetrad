@@ -3,10 +3,18 @@
 
 import { afterAll, describe, expect, it } from "vitest";
 import WebSocket from "ws";
+import type { SpawnBotRequest } from "../src/bots.js";
 import { startServer } from "../src/server.js";
 
 const PORT = 18923;
-const server = startServer({ port: PORT });
+const spawned: SpawnBotRequest[] = [];
+const server = startServer({
+  port: PORT,
+  spawnBot: (req) => {
+    spawned.push(req);
+    return null;
+  },
+});
 
 afterAll(() => server.close());
 
@@ -98,5 +106,44 @@ describe("websocket end-to-end", () => {
 
     a.ws.close();
     b.ws.close();
+  });
+
+  it("host can list models and add a bot; non-hosts cannot", async () => {
+    const host = await client();
+    const guest = await client();
+
+    send(host, { t: "create", name: "Alice" });
+    const joined = await host.recv();
+    await host.recv(); // lobby
+
+    send(guest, { t: "join", code: joined.code, name: "Bob" });
+    await guest.recv(); // joined
+    await host.recv(); // lobby update
+    await guest.recv();
+
+    send(host, { t: "listBotModels" });
+    const models = await host.recv();
+    expect(models.t).toBe("botModels");
+    expect(models.models.length).toBeGreaterThan(0);
+
+    send(guest, { t: "addBot", model: models.models[0] });
+    const denied = await guest.recv();
+    expect(denied).toMatchObject({ t: "error", code: "notHost" });
+    expect(spawned).toHaveLength(0);
+
+    send(host, { t: "addBot", model: models.models[0], instructions: "play safe" });
+    // no ack on success; wait for the guest's denial round-trip above to have
+    // proven ordering, then assert the spawn request landed
+    await new Promise((r) => setTimeout(r, 50));
+    expect(spawned).toHaveLength(1);
+    expect(spawned[0]).toMatchObject({
+      code: joined.code,
+      model: models.models[0],
+      instructions: "play safe",
+      serverUrl: `ws://127.0.0.1:${PORT}`,
+    });
+
+    host.ws.close();
+    guest.ws.close();
   });
 });
