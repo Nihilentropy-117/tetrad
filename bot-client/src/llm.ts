@@ -26,9 +26,10 @@ export interface LlmConfig {
   timeoutMs?: number;
 }
 
-export async function chat(cfg: LlmConfig, messages: ChatMessage[]): Promise<string> {
+export async function chat(cfg: LlmConfig, messages: ChatMessage[], timeoutMs?: number): Promise<string> {
+  const budget = timeoutMs ?? cfg.timeoutMs ?? 120_000;
   const ctl = new AbortController();
-  const timer = setTimeout(() => ctl.abort(), cfg.timeoutMs ?? 30_000);
+  const timer = setTimeout(() => ctl.abort(), budget);
   try {
     const base = process.env.OPENROUTER_BASE_URL ?? "https://openrouter.ai/api/v1";
     const res = await fetch(`${base}/chat/completions`, {
@@ -52,6 +53,11 @@ export async function chat(cfg: LlmConfig, messages: ChatMessage[]): Promise<str
     const content = data.choices?.[0]?.message?.content;
     if (!content) throw new LlmError("OpenRouter returned no content");
     return content;
+  } catch (e) {
+    if ((e as Error).name === "AbortError") {
+      throw new LlmError(`model did not answer within ${Math.round(budget / 1000)}s (slow/queued model? raise --llm-timeout)`);
+    }
+    throw e;
   } finally {
     clearTimeout(timer);
   }

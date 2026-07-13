@@ -39,6 +39,7 @@ Flags:
 | `--name <name>` | `Bot` | Display name in the lobby |
 | `--server <url>` | `ws://localhost:8080` | Server WebSocket URL |
 | `--log-dir <dir>` | `./logs` | Where training logs are written |
+| `--llm-timeout <s>` | `120` | Seconds to wait for the model per call (slow free-tier models may need more). Automatically capped near the 45s server deadline when answering a decision prompt. |
 
 If the LLM replies unusably or the server rejects its action, the bot retries
 once with the error appended, then falls back to a safe default (decision

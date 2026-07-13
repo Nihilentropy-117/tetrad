@@ -98,10 +98,19 @@ export class Agent {
       { role: "user", content: userMsg },
     ];
 
+    // Normal turns have no server timer; only pending decisions auto-resolve
+    // at msg.deadline. Give the model the full budget, but never blow past a
+    // decision deadline (keep a 5s margin to deliver the action).
+    const budget = () => {
+      const full = this.llm.timeoutMs ?? 120_000;
+      if (!msg.deadline) return full;
+      return Math.max(5_000, Math.min(full, msg.deadline - Date.now() - 5_000));
+    };
+
     for (let attempt = 0; attempt < 2; attempt++) {
       let raw: string;
       try {
-        raw = await chat(this.llm, context);
+        raw = await chat(this.llm, context, budget());
       } catch (e) {
         console.error(`[llm] ${(e as Error).message}`);
         break; // LLM unreachable — go straight to fallback

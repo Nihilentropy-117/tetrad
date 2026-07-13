@@ -19,7 +19,7 @@ function arg(name: string): string | undefined {
 function fail(msg: string): never {
   console.error(msg);
   console.error(
-    "\nUsage: OPENROUTER_API_KEY=... npm start -- --join <CODE> --model <openrouter-model-id> [--name Bot] [--server ws://localhost:8080] [--log-dir ./logs]"
+    "\nUsage: OPENROUTER_API_KEY=... npm start -- --join <CODE> --model <openrouter-model-id> [--name Bot] [--server ws://localhost:8080] [--log-dir ./logs] [--llm-timeout 120]"
   );
   process.exit(1);
 }
@@ -29,6 +29,8 @@ const model = arg("model") ?? fail("Missing --model <openrouter-model-id> (no de
 const apiKey = process.env.OPENROUTER_API_KEY ?? fail("OPENROUTER_API_KEY environment variable is not set.");
 const name = arg("name") ?? "Bot";
 const server = arg("server") ?? "ws://localhost:8080";
+const llmTimeout = Number(arg("llm-timeout") ?? 120) * 1000;
+if (!Number.isFinite(llmTimeout) || llmTimeout <= 0) fail("--llm-timeout must be a positive number of seconds.");
 const logDir = arg("log-dir") ?? new URL("../logs", import.meta.url).pathname;
 
 const log = new GameLog(logDir);
@@ -39,7 +41,7 @@ const session: Session = new Session(server, code, name, {
     if (!agent) {
       log.begin(session.code ?? code, SYSTEM_PROMPT);
       console.log(`Game log: ${log.path}`);
-      agent = new Agent(session, { apiKey, model }, log);
+      agent = new Agent(session, { apiKey, model, timeoutMs: llmTimeout }, log);
       void agent.finished.then(() => {
         console.log("Game finished — closing.");
         session.close();
