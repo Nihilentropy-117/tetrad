@@ -45,3 +45,18 @@ Flags:
 If the LLM replies unusably or the server rejects its action, the bot retries
 once with the error appended, then falls back to a safe default (decision
 default / end turn / draw) so games never stall.
+
+## Bot spawner (web client's "Add bot" button)
+
+The lobby's **Add bot** button in the human client needs this sidecar running:
+
+```sh
+OPENROUTER_API_KEY=sk-or-... npm run spawner
+```
+
+It listens on port `8090` (`SPAWNER_PORT` to change) and launches the same CLI
+process as a manual run — output, colors, and training logs all appear exactly
+as if you'd started the bot in that terminal yourself. The model dropdown is
+served from `BOT_MODELS` (comma-separated env var) or a built-in default list.
+Up to 3 bots per room. Terminal-launched bots are unaffected and can be mixed
+freely with spawner-launched ones.

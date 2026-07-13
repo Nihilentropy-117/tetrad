@@ -113,9 +113,10 @@ export interface PlayerView {
 
 export type ClientMsg =
   | { t: "create"; name: string; mode?: "ffa" | "teams" }
-  | { t: "join"; code: string; name: string }
+  | { t: "join"; code: string; name: string; bot?: boolean }
   | { t: "rejoin"; code: string; token: string }
   | { t: "start" }
+  | { t: "recuse"; spectate: boolean }
   | { t: "action"; action: Action }
   | { t: "ping" };
 

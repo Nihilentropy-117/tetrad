@@ -6,6 +6,7 @@
   "type": "module",
   "scripts": {
     "start": "tsx src/main.ts",
+    "spawner": "tsx src/spawner.ts",
     "typecheck": "tsc --noEmit"
   },
   "dependencies": {

@@ -36,7 +36,7 @@ export class Session {
       this.reconnectDelay = 1000;
       const hello: ClientMsg = this.token
         ? { t: "rejoin", code: this.roomCode, token: this.token }
-        : { t: "join", code: this.roomCode.toUpperCase(), name: this.name };
+        : { t: "join", code: this.roomCode.toUpperCase(), name: this.name, bot: true };
       ws.send(JSON.stringify(hello));
     });
     ws.on("message", (data) => {
