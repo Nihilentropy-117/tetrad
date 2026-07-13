@@ -295,21 +295,27 @@ function feedLineColor(l: string): string {
 
 export function EventFeed({ lines }: { lines: string[] }) {
   const [expanded, setExpanded] = useState(false);
+  const scrollRef = useRef<ScrollView>(null);
   return (
     <View style={s.feedWrap}>
       <Pressable onPress={() => setExpanded(!expanded)} style={s.feedHeader}>
         <Text style={s.feedTitle}>COMBAT LOG</Text>
         <Text style={s.dimSmall}>{expanded ? "▾ collapse" : "▸ expand"}</Text>
       </Pressable>
-      <ScrollView style={[s.feed, { maxHeight: expanded ? 440 : 190 }]} contentContainerStyle={{ padding: 10 }}>
-        {[...lines].reverse().map((l, i) => (
+      <ScrollView
+        ref={scrollRef}
+        onContentSizeChange={() => scrollRef.current?.scrollToEnd({ animated: false })}
+        style={[s.feed, { maxHeight: expanded ? 440 : 190 }]}
+        contentContainerStyle={{ padding: 10 }}
+      >
+        {lines.map((l, i) => (
           <Text
-            key={`${lines.length - i}`}
+            key={`${i}`}
             style={[
               s.feedLine,
               { color: feedLineColor(l) },
               l.startsWith("—") && s.feedTurnSep,
-              i === 0 && { fontWeight: "700" },
+              i === lines.length - 1 && { fontWeight: "700" },
             ]}
           >
             {l}
