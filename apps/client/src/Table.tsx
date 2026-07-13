@@ -190,19 +190,23 @@ export function Table() {
           </>
         ) : null}
 
-        {/* actions */}
-        <View style={s.actions}>
-          <Btn label="Draw" disabled={!canDraw} onPress={() => action({ type: "drawCard", player: you })} />
-          <Btn label="End turn" disabled={!canEnd} onPress={() => action({ type: "endTurn", player: you })} />
-          {confirmConcede ? (
-            <>
-              <Btn label="Really concede" kind="danger" onPress={() => action({ type: "concede", player: you })} />
-              <Btn label="Stay" kind="ghost" onPress={() => setConfirmConcede(false)} />
-            </>
-          ) : (
-            <Btn label="Concede" kind="ghost" onPress={() => setConfirmConcede(true)} />
-          )}
-        </View>
+        {/* actions (spectators hold no seat — nothing to act with) */}
+        {me ? (
+          <View style={s.actions}>
+            <Btn label="Draw" disabled={!canDraw} onPress={() => action({ type: "drawCard", player: you })} />
+            <Btn label="End turn" disabled={!canEnd} onPress={() => action({ type: "endTurn", player: you })} />
+            {confirmConcede ? (
+              <>
+                <Btn label="Really concede" kind="danger" onPress={() => action({ type: "concede", player: you })} />
+                <Btn label="Stay" kind="ghost" onPress={() => setConfirmConcede(false)} />
+              </>
+            ) : (
+              <Btn label="Concede" kind="ghost" onPress={() => setConfirmConcede(true)} />
+            )}
+          </View>
+        ) : (
+          <Text style={[s.dim, { marginTop: 10 }]}>👁 spectating</Text>
+        )}
 
         <EventFeed lines={st.feed} />
       </ScrollView>

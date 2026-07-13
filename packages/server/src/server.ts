@@ -79,7 +79,7 @@ export function startServer(opts: ServerOptions): { wss: WebSocketServer; close(
               conn.send({ t: "error", code: "noRoom", message: "no such room" });
               return;
             }
-            const joined = room.join(msg.name, conn);
+            const joined = room.join(msg.name, conn, msg.bot === true);
             if (joined) bound = { room, token: joined.token };
             return;
           }
@@ -94,6 +94,9 @@ export function startServer(opts: ServerOptions): { wss: WebSocketServer; close(
           }
           case "start":
             bound?.room.start(bound.token);
+            return;
+          case "recuse":
+            bound?.room.recuse(bound.token, msg.spectate === true);
             return;
           case "action":
             bound?.room.handleAction(bound.token, msg.action);

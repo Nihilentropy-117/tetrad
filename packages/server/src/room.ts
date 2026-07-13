@@ -48,6 +48,9 @@ interface Seat {
   playerId: PlayerId;
   name: string;
   conn: Conn | null;
+  bot: boolean;
+  /** pre-start opt-out: watches the game without playing */
+  spectating: boolean;
 }
 
 let tokenCounter = 0;
@@ -95,7 +98,7 @@ export class Room {
     return this.log;
   }
 
-  join(name: string, conn: Conn): { token: string; playerId: PlayerId } | null {
+  join(name: string, conn: Conn, bot = false): { token: string; playerId: PlayerId } | null {
     if (this.started) {
       conn.send({ t: "error", code: "started", message: "game already started; use rejoin" });
       return null;
@@ -109,6 +112,8 @@ export class Room {
       playerId: `p${this.seats.length}`,
       name: name || `P${this.seats.length}`,
       conn,
+      bot,
+      spectating: false,
     };
     this.seats.push(seat);
     conn.send({ t: "joined", code: this.code, token: seat.token, playerId: seat.playerId, seat: this.seats.length - 1 });
@@ -139,6 +144,26 @@ export class Room {
     if (!this.started) this.broadcastLobby();
   }
 
+  /** Host opt-out before start: watch the game without holding a seat in it. */
+  recuse(token: string, spectate: boolean): void {
+    const seat = this.seats.find((s) => s.token === token);
+    if (!seat) return;
+    if (seat !== this.seats[0]) {
+      seat.conn?.send({ t: "error", code: "notHost", message: "only the host can recuse" });
+      return;
+    }
+    if (this.started) {
+      seat.conn?.send({ t: "error", code: "started", message: "cannot recuse after the game started" });
+      return;
+    }
+    if (spectate && this.seats.filter((s) => s !== seat && !s.spectating).length < 2) {
+      seat.conn?.send({ t: "error", code: "needPlayers", message: "need at least 2 remaining players to recuse" });
+      return;
+    }
+    seat.spectating = spectate;
+    this.broadcastLobby();
+  }
+
   start(token: string): void {
     const seat = this.seats.find((s) => s.token === token);
     if (!seat) return;
@@ -150,18 +175,19 @@ export class Room {
       seat.conn?.send({ t: "error", code: "started", message: "already started" });
       return;
     }
-    if (this.seats.length < 2) {
+    const active = this.seats.filter((s) => !s.spectating);
+    if (active.length < 2) {
       seat.conn?.send({ t: "error", code: "needPlayers", message: "need at least 2 players" });
       return;
     }
-    if (this.mode === "teams" && this.seats.length !== 4) {
+    if (this.mode === "teams" && active.length !== 4) {
       seat.conn?.send({ t: "error", code: "needPlayers", message: "teams mode needs exactly 4 players" });
       return;
     }
     const config: GameConfig = {
       mode: this.mode,
-      players: this.seats.map((s) => ({ id: s.playerId, name: s.name })),
-      dealerSeat: this.seats.length - 1, // player left of the dealer (seat 0) goes first (S7)
+      players: active.map((s) => ({ id: s.playerId, name: s.name })),
+      dealerSeat: active.length - 1, // player left of the dealer (seat 0) goes first (S7)
     };
     this.state = initialState(config, this.seed);
     this.persist(JSON.stringify({ header: true, seed: this.seed, config }));
@@ -226,7 +252,8 @@ export class Room {
       t: "state",
       version: this.version,
       view,
-      legal: legalActions(this.state, seat.playerId),
+      // spectators hold no seat in the game; the engine has no legality for them
+      legal: seat.spectating ? [] : legalActions(this.state, seat.playerId),
       events: eventsFor(events, seat.playerId),
       ...(view.decision && this.deadlineAt !== null ? { deadline: this.deadlineAt } : {}),
     });
@@ -241,7 +268,13 @@ export class Room {
       t: "lobby",
       code: this.code,
       mode: this.mode,
-      players: this.seats.map((s) => ({ playerId: s.playerId, name: s.name, connected: s.conn !== null })),
+      players: this.seats.map((s) => ({
+        playerId: s.playerId,
+        name: s.name,
+        connected: s.conn !== null,
+        bot: s.bot,
+        spectating: s.spectating,
+      })),
       host: this.seats[0]?.playerId ?? "p0",
     };
     for (const seat of this.seats) seat.conn?.send(msg);

@@ -16,9 +16,10 @@ export type { Action, ActionSpec, DecisionRequest, GameEvent, PlayerView };
 
 export type ClientMsg =
   | { t: "create"; name: string; mode?: "ffa" | "teams" }
-  | { t: "join"; code: string; name: string }
+  | { t: "join"; code: string; name: string; bot?: boolean }
   | { t: "rejoin"; code: string; token: string }
   | { t: "start" }
+  | { t: "recuse"; spectate: boolean }
   | { t: "action"; action: Action }
   | { t: "ping" };
 
@@ -26,6 +27,8 @@ export interface LobbyPlayer {
   playerId: string;
   name: string;
   connected: boolean;
+  bot?: boolean;
+  spectating?: boolean;
 }
 
 export type ServerMsg =

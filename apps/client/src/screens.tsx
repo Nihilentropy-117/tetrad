@@ -1,10 +1,21 @@
 // Pre-game screens: connect/create/join, lobby, class select.
 
-import React, { useState } from "react";
-import { ScrollView, StyleSheet, Text, TextInput, View } from "react-native";
+import React, { useEffect, useState } from "react";
+import { Pressable, ScrollView, StyleSheet, Text, TextInput, View } from "react-native";
 import { Btn, ColorChip, theme } from "./components";
 import { defaultServerUrl, loadSession, useGame } from "./store";
 import { ABILITY_TEXT, CLASS_META } from "./types";
+
+/** The bot spawner (bot-client `npm run spawner`) listens on the game server's
+ * host at this port and launches bot processes on request. */
+function spawnerUrl(serverUrl: string): string {
+  try {
+    const u = new URL(serverUrl);
+    return `http://${u.hostname}:8090`;
+  } catch {
+    return "http://localhost:8090";
+  }
+}
 
 export function ConnectScreen() {
   const { st, create, join, rejoin } = useGame();
@@ -59,10 +70,16 @@ export function ConnectScreen() {
 }
 
 export function LobbyScreen() {
-  const { st, start, leave } = useGame();
+  const { st, start, leave, recuse } = useGame();
   const lobby = st.lobby!;
   const you = st.session?.you;
   const isHost = lobby.host === you;
+  const [addingBot, setAddingBot] = useState(false);
+
+  const botCount = lobby.players.filter((p) => p.bot).length;
+  const spectating = lobby.players.find((p) => p.playerId === you)?.spectating ?? false;
+  const activeCount = lobby.players.filter((p) => !p.spectating).length;
+  const canStart = activeCount >= 2;
 
   return (
     <View style={[s.root, s.center]}>
@@ -74,20 +91,133 @@ export function LobbyScreen() {
       <View style={s.form}>
         {lobby.players.map((p) => (
           <Text key={p.playerId} style={s.lobbyRow}>
-            {p.playerId === you ? "• You" : `• ${p.name}`} ({p.playerId}){p.connected ? "" : " — offline"}
+            {p.playerId === you ? "• You" : `• ${p.name}`} ({p.playerId}){p.bot ? " 🤖" : ""}
+            {p.connected ? "" : " — offline"}
             {p.playerId === lobby.host ? "  👑" : ""}
+            {p.spectating ? "  👁 spectating" : ""}
           </Text>
         ))}
         <Text style={s.dim}>{lobby.players.length}/4 players</Text>
         {isHost ? (
-          <Btn label="Start game" kind="primary" disabled={lobby.players.length < 2} onPress={start} />
+          <Btn label="Start game" kind="primary" disabled={!canStart} onPress={start} />
         ) : (
           <Text style={s.dim}>waiting for the host to start…</Text>
         )}
         <Btn label="Leave" kind="ghost" onPress={leave} />
+        {isHost ? (
+          <>
+            <Btn
+              label="Add bot"
+              disabled={lobby.players.length >= 4 || botCount >= 3}
+              onPress={() => setAddingBot(true)}
+            />
+            {botCount >= 2 ? (
+              <Btn
+                label={spectating ? "Rejoin the match" : "Recuse (watch the bots)"}
+                kind="ghost"
+                onPress={() => recuse(!spectating)}
+              />
+            ) : null}
+          </>
+        ) : null}
         {st.error ? <Text style={s.error}>⚠ {st.error}</Text> : null}
       </View>
+      {addingBot && st.session ? (
+        <AddBotModal code={lobby.code} serverUrl={st.session.url} onClose={() => setAddingBot(false)} />
+      ) : null}
     </View>
+  );
+}
+
+/** Popup for spawning a bot: model dropdown (list served by the bot spawner)
+ * plus free-text instructions appended to the bot's system prompt. */
+function AddBotModal({ code, serverUrl, onClose }: { code: string; serverUrl: string; onClose: () => void }) {
+  const base = spawnerUrl(serverUrl);
+  const [models, setModels] = useState<string[] | null>(null);
+  const [model, setModel] = useState<string | null>(null);
+  const [open, setOpen] = useState(false);
+  const [instructions, setInstructions] = useState("");
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+
+  useEffect(() => {
+    let alive = true;
+    fetch(`${base}/models`)
+      .then((r) => r.json())
+      .then((d: { models: string[] }) => {
+        if (!alive) return;
+        setModels(d.models);
+        setModel(d.models[0] ?? null);
+      })
+      .catch(() => {
+        if (alive) setError("bot spawner not reachable — run `npm run spawner` in bot-client/");
+      });
+    return () => {
+      alive = false;
+    };
+  }, [base]);
+
+  const add = () => {
+    if (!model) return;
+    setBusy(true);
+    setError(null);
+    fetch(`${base}/spawn`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ code, model, instructions: instructions.trim() || undefined, server: serverUrl }),
+    })
+      .then(async (r) => {
+        if (!r.ok) throw new Error((await r.json().catch(() => null))?.error ?? `HTTP ${r.status}`);
+        onClose(); // the bot appears in the lobby when it joins
+      })
+      .catch((e: Error) => {
+        setBusy(false);
+        setError(e.message);
+      });
+  };
+
+  return (
+    <Pressable style={s.modalOverlay} onPress={onClose}>
+      <Pressable style={s.modalCard} onPress={() => {}}>
+        <Text style={s.modalTitle}>Add a bot</Text>
+        <Text style={s.label}>model</Text>
+        <Pressable style={s.input} onPress={() => setOpen(!open)}>
+          <Text style={{ color: model ? theme.text : theme.dim }}>
+            {model ?? (models === null ? "loading models…" : "no models")} {open ? "▴" : "▾"}
+          </Text>
+        </Pressable>
+        {open && models ? (
+          <ScrollView style={s.dropdown}>
+            {models.map((m) => (
+              <Pressable
+                key={m}
+                style={[s.dropdownRow, m === model && { backgroundColor: theme.panelHi }]}
+                onPress={() => {
+                  setModel(m);
+                  setOpen(false);
+                }}
+              >
+                <Text style={{ color: theme.text, fontSize: 13 }}>{m}</Text>
+              </Pressable>
+            ))}
+          </ScrollView>
+        ) : null}
+        <Text style={s.label}>instructions (optional)</Text>
+        <TextInput
+          style={[s.input, { minHeight: 64 }]}
+          value={instructions}
+          onChangeText={setInstructions}
+          placeholder='e.g. "always play the Scout class"'
+          placeholderTextColor={theme.dim}
+          multiline
+        />
+        <View style={s.row}>
+          <Btn label={busy ? "Adding…" : "Add"} kind="primary" disabled={!model || busy} onPress={add} />
+          <Btn label="Cancel" kind="ghost" onPress={onClose} />
+        </View>
+        {error ? <Text style={s.error}>⚠ {error}</Text> : null}
+      </Pressable>
+    </Pressable>
   );
 }
 
@@ -96,14 +226,17 @@ export function ClassSelectScreen() {
   const game = st.game!;
   const you = st.session?.you ?? "";
   const choices = game.legal.filter((l) => l.type === "chooseClass");
+  const spectating = !game.view.players.some((p) => p.id === you);
   const picked = choices.length === 0;
 
   return (
     <ScrollView style={s.root} contentContainerStyle={s.center}>
-      <Text style={s.logo}>choose your class</Text>
+      <Text style={s.logo}>{spectating ? "class select" : "choose your class"}</Text>
       <Text style={s.tag}>picks are hidden until everyone locks in</Text>
       {picked ? (
-        <Text style={[s.dim, { marginTop: 30 }]}>locked in — waiting for the others…</Text>
+        <Text style={[s.dim, { marginTop: 30 }]}>
+          {spectating ? "👁 spectating — waiting for players to pick…" : "locked in — waiting for the others…"}
+        </Text>
       ) : (
         <View style={s.classGrid}>
           {choices.map((c) => {
@@ -200,4 +333,34 @@ const s = StyleSheet.create({
   passive: { color: "#d8c27a", fontSize: 10.5, lineHeight: 15 },
   abilityLine: { color: theme.dim, fontSize: 10.5, lineHeight: 15 },
   abilityKey: { color: theme.accent, fontWeight: "800" },
+  modalOverlay: {
+    position: "absolute",
+    top: 0,
+    left: 0,
+    right: 0,
+    bottom: 0,
+    backgroundColor: "rgba(0,0,0,0.6)",
+    alignItems: "center",
+    justifyContent: "center",
+    padding: 20,
+  },
+  modalCard: {
+    backgroundColor: theme.panel,
+    borderWidth: 1,
+    borderColor: theme.line,
+    borderRadius: 12,
+    padding: 16,
+    width: "100%",
+    maxWidth: 380,
+    gap: 8,
+  },
+  modalTitle: { color: theme.text, fontWeight: "800", fontSize: 16 },
+  dropdown: {
+    maxHeight: 180,
+    backgroundColor: theme.panelHi,
+    borderWidth: 1,
+    borderColor: theme.line,
+    borderRadius: 8,
+  },
+  dropdownRow: { paddingHorizontal: 12, paddingVertical: 8 },
 });

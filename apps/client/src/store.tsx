@@ -129,6 +129,7 @@ export interface GameApi {
   join(url: string, name: string, code: string): void;
   rejoin(session: Session): void;
   start(): void;
+  recuse(spectate: boolean): void;
   action(a: Action): void;
   leave(): void;
 }
@@ -176,6 +177,7 @@ export function GameProvider({ children }: { children: React.ReactNode }) {
       join: (url, name, code) => open(url, { t: "join", code: code.toUpperCase(), name }),
       rejoin: (s) => open(s.url, { t: "rejoin", code: s.code, token: s.token }),
       start: () => send({ t: "start" }),
+      recuse: (spectate) => send({ t: "recuse", spectate }),
       action: (a) => send({ t: "action", action: a }),
       leave: () => {
         clearSession();
