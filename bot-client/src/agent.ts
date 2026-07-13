@@ -7,7 +7,6 @@ import { blue, dim, green, orange } from "./colors.js";
 import { GameLog } from "./gamelog.js";
 import { chat, parseReply, type BotReply, type ChatMessage, type LlmConfig, LlmError } from "./llm.js";
 import { fmtEvent, renderState } from "./prompt.js";
-import { SYSTEM_PROMPT } from "./rules.js";
 import type { Session } from "./net.js";
 import type { Action, Color, GameEvent, PlayerId, StateMsg } from "./types.js";
 import { COLORS } from "./types.js";
@@ -28,7 +27,8 @@ export class Agent {
   constructor(
     private session: Session,
     private llm: LlmConfig,
-    private log: GameLog
+    private log: GameLog,
+    private systemPrompt: string
   ) {}
 
   onServerError(code: string, message: string): void {
@@ -96,7 +96,7 @@ export class Agent {
     const userMsg = renderState(msg);
     this.log.append("user", userMsg);
     const context: ChatMessage[] = [
-      { role: "system", content: SYSTEM_PROMPT },
+      { role: "system", content: this.systemPrompt },
       { role: "user", content: userMsg },
     ];
 

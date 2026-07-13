@@ -20,7 +20,7 @@ function arg(name: string): string | undefined {
 function fail(msg: string): never {
   console.error(msg);
   console.error(
-    "\nUsage: OPENROUTER_API_KEY=... npm start -- --join <CODE> --model <openrouter-model-id> [--name Bot] [--server ws://localhost:8080] [--log-dir ./logs] [--llm-timeout 120]"
+    '\nUsage: OPENROUTER_API_KEY=... npm start -- --join <CODE> --model <openrouter-model-id> [--name Bot] [--server ws://localhost:8080] [--log-dir ./logs] [--llm-timeout 120] [--instructions "always pick priest"]'
   );
   process.exit(1);
 }
@@ -31,6 +31,10 @@ const apiKey = process.env.OPENROUTER_API_KEY ?? fail("OPENROUTER_API_KEY enviro
 const server = arg("server") ?? "ws://localhost:8080";
 const llmTimeout = Number(arg("llm-timeout") ?? 120) * 1000;
 if (!Number.isFinite(llmTimeout) || llmTimeout <= 0) fail("--llm-timeout must be a positive number of seconds.");
+const instructions = arg("instructions");
+const systemPrompt = instructions
+  ? `${SYSTEM_PROMPT}\n\n# Operator instructions (follow these above all strategy advice)\n${instructions}`
+  : SYSTEM_PROMPT;
 const logDir = arg("log-dir") ?? new URL("../logs", import.meta.url).pathname;
 
 /** Ask the model to invent its own handle for this game; sci-fi flavored. */
@@ -60,9 +64,9 @@ let agent: Agent | null = null;
 const session: Session = new Session(server, code, name, {
   onState: (msg) => {
     if (!agent) {
-      log.begin(session.code ?? code, SYSTEM_PROMPT);
+      log.begin(session.code ?? code, systemPrompt);
       console.log(`Game log: ${log.path}`);
-      agent = new Agent(session, { apiKey, model, timeoutMs: llmTimeout }, log);
+      agent = new Agent(session, { apiKey, model, timeoutMs: llmTimeout }, log, systemPrompt);
       void agent.finished.then(() => {
         console.log("Game finished — closing.");
         session.close();
