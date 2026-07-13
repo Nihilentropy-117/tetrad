@@ -85,6 +85,8 @@ export class Agent {
       console.log(summary);
       this.eventBuffer = [];
       this.log.append("user", renderState(msg));
+      const u = this.log.usage;
+      console.log(`Tokens: ${u.tokensIn} in / ${u.tokensOut} out over ${u.llmCalls} LLM call(s).`);
       this.finishedResolve();
       return;
     }
@@ -110,7 +112,9 @@ export class Agent {
     for (let attempt = 0; attempt < 2; attempt++) {
       let raw: string;
       try {
-        raw = await chat(this.llm, context, budget());
+        const result = await chat(this.llm, context, budget());
+        raw = result.content;
+        this.log.addUsage(result.usage);
       } catch (e) {
         console.error(`[llm] ${(e as Error).message}`);
         break; // LLM unreachable — go straight to fallback

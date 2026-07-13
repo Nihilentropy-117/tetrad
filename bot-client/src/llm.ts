@@ -20,13 +20,23 @@ export interface BotReply {
 
 export class LlmError extends Error {}
 
+export interface TokenUsage {
+  promptTokens: number;
+  completionTokens: number;
+}
+
+export interface ChatResult {
+  content: string;
+  usage: TokenUsage | null;
+}
+
 export interface LlmConfig {
   apiKey: string;
   model: string;
   timeoutMs?: number;
 }
 
-export async function chat(cfg: LlmConfig, messages: ChatMessage[], timeoutMs?: number): Promise<string> {
+export async function chat(cfg: LlmConfig, messages: ChatMessage[], timeoutMs?: number): Promise<ChatResult> {
   const budget = timeoutMs ?? cfg.timeoutMs ?? 120_000;
   const ctl = new AbortController();
   const timer = setTimeout(() => ctl.abort(), budget);
@@ -47,12 +57,17 @@ export async function chat(cfg: LlmConfig, messages: ChatMessage[], timeoutMs?: 
     }
     const data = (await res.json()) as {
       choices?: Array<{ message?: { content?: string } }>;
+      usage?: { prompt_tokens?: number; completion_tokens?: number };
       error?: { message?: string };
     };
     if (data.error?.message) throw new LlmError(`OpenRouter error: ${data.error.message}`);
     const content = data.choices?.[0]?.message?.content;
     if (!content) throw new LlmError("OpenRouter returned no content");
-    return content;
+    const usage =
+      data.usage?.prompt_tokens !== undefined
+        ? { promptTokens: data.usage.prompt_tokens ?? 0, completionTokens: data.usage.completion_tokens ?? 0 }
+        : null;
+    return { content, usage };
   } catch (e) {
     if ((e as Error).name === "AbortError") {
       throw new LlmError(`model did not answer within ${Math.round(budget / 1000)}s (slow/queued model? raise --llm-timeout)`);
