@@ -36,7 +36,7 @@ Flags:
 |---|---|---|
 | `--join <CODE>` | required | Room code to join |
 | `--model <id>` | required | OpenRouter model id |
-| `--name <name>` | `Bot` | Display name in the lobby |
+| `--name <name>` | generated | Display name in the lobby. By default the model invents a sci-fi gamertag for itself each game. |
 | `--server <url>` | `ws://localhost:8080` | Server WebSocket URL |
 | `--log-dir <dir>` | `./logs` | Where training logs are written |
 | `--llm-timeout <s>` | `120` | Seconds to wait for the model per call (slow free-tier models may need more). Automatically capped near the 45s server deadline when answering a decision prompt. |

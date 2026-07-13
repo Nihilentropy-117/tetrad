@@ -25,7 +25,7 @@ export class Session {
   constructor(
     private url: string,
     private roomCode: string,
-    private name: string,
+    readonly name: string,
     private events: SessionEvents
   ) {}
 

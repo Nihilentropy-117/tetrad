@@ -62,7 +62,7 @@ export class Agent {
           if (m.version <= this.lastHandled) continue;
           this.lastHandled = m.version;
           this.eventBuffer.push(...m.events);
-          for (const line of eventLines(m)) console.log(`  ${line}`);
+          for (const line of eventLines(m, this.session.name)) console.log(`  ${line}`);
           msg = m;
         }
         if (msg) await this.handle(msg);
@@ -249,12 +249,13 @@ function asColor(v: unknown, field: string): Color {
 }
 
 /** Console lines for one state's events: human-readable, colored by actor —
- * green for the humans, orange for the bot, dim for neutral bookkeeping. */
-function eventLines(msg: StateMsg): string[] {
+ * green for the humans, orange for the bot, dim for neutral bookkeeping.
+ * The bot appears under its gamertag, not "YOU". */
+function eventLines(msg: StateMsg, selfLabel: string): string[] {
   const you = msg.view.you;
   const lines: string[] = [];
   for (const e of msg.events) {
-    const text = fmtEvent(e, msg.view);
+    const text = fmtEvent(e, msg.view, selfLabel);
     if (text === null) continue;
     const subject = e.player ?? e.src ?? e.roller ?? e.by ?? e.attacker ?? e.owner ?? e.target ?? e.a;
     if (subject === undefined) lines.push(dim(text));

@@ -54,9 +54,11 @@ function describeSpec(spec: ActionSpec, view: PlayerView): string {
   return needs.length ? `${desc} — needs ${needs.join("; ")}` : desc;
 }
 
-/** Human line for an event; null = skip (noise). Trimmed mirror of the UI's fmtEvent. */
-export function fmtEvent(e: GameEvent, view: PlayerView): string | null {
-  const p = (id: unknown) => (id === view.you ? "YOU" : playerLabel(view, String(id)));
+/** Human line for an event; null = skip (noise). Trimmed mirror of the UI's
+ * fmtEvent. `selfLabel` names the viewer: "YOU" in LLM prompts, the bot's
+ * gamertag in terminal output. */
+export function fmtEvent(e: GameEvent, view: PlayerView, selfLabel = "YOU"): string | null {
+  const p = (id: unknown) => (id === view.you ? selfLabel : playerLabel(view, String(id)));
   switch (e.type) {
     case "TurnStarted":
       return `-- ${p(e.player)}'s turn ${e.turn}${e.actingAs !== e.player ? ` (played by ${p(e.actingAs)})` : ""}`;
@@ -87,9 +89,9 @@ export function fmtEvent(e: GameEvent, view: PlayerView): string | null {
     case "DrewCard":
       return `${p(e.player)} drew a card`;
     case "CardDrawn":
-      return `you drew ${cardName(String(e.card))}`;
+      return `${selfLabel} drew ${cardName(String(e.card))}`;
     case "CardViewed":
-      return `you see: ${cardName(String(e.card))}`;
+      return `${selfLabel} sees: ${cardName(String(e.card))}`;
     case "AbilityTriggered":
       return `${p(e.player)} used ability: ${e.name}`;
     case "AttackBlocked":
