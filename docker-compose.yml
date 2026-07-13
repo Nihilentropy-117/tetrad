@@ -1,9 +1,14 @@
+x-openrouter-env: &openrouter-env
+  environment:
+    OPENROUTER_API_KEY: ${OPENROUTER_API_KEY}
+
 services:
   server:
     build:
       context: .
       dockerfile: Dockerfile.server
     image: tetrad-server:local
+    <<: *openrouter-env
     ports:
       - "8080:8080"
     volumes:
@@ -15,6 +20,7 @@ services:
       context: .
       dockerfile: Dockerfile.client
     image: tetrad-client:local
+    <<: *openrouter-env
     ports:
       - "3001:80"
     depends_on:
@@ -23,6 +29,7 @@ services:
 
   client-b:
     image: tetrad-client:local
+    <<: *openrouter-env
     ports:
       - "3002:80"
     depends_on:
@@ -34,6 +41,7 @@ services:
       context: .
       dockerfile: Dockerfile.client
     image: tetrad-client:local
+    <<: *openrouter-env
     ports:
       - "3003:80"
     depends_on:
@@ -42,6 +50,7 @@ services:
 
   client-d:
     image: tetrad-client:local
+    <<: *openrouter-env
     ports:
       - "3004:80"
     depends_on:
