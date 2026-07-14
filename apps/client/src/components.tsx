@@ -2,9 +2,11 @@
 // decision prompt. Everything renders server-provided data verbatim.
 
 import React, { useEffect, useRef, useState } from "react";
-import { Animated, Pressable, ScrollView, StyleSheet, Text, View } from "react-native";
+import { Animated, Image, Pressable, ScrollView, StyleSheet, Text, useWindowDimensions, View } from "react-native";
+import type { ImageSourcePropType } from "react-native";
 import type { DecisionRequest, PlayerView } from "./types";
 import { cardHelp, cardInfo, CLASS_META, COLOR_HEX, playerName } from "./types";
+import { cardArt, CARD_ART_RATIO } from "./art";
 
 export const theme = {
   bg: "#10151f",
@@ -234,6 +236,30 @@ export function TurnOrderStrip({ view }: { view: PlayerView }) {
   );
 }
 
+/** Near-full-screen art viewer on the dark overlay. Tap anywhere to close;
+ * children (buttons, panels) render below the image and must block their own
+ * taps if they shouldn't dismiss. */
+export function ArtLightbox({
+  source,
+  ratio,
+  onClose,
+  children,
+}: {
+  source: ImageSourcePropType;
+  ratio: number;
+  onClose: () => void;
+  children?: React.ReactNode;
+}) {
+  const win = useWindowDimensions();
+  const w = Math.min(0.92 * win.width, 0.72 * win.height * ratio);
+  return (
+    <Pressable style={s.detailOverlay} onPress={onClose}>
+      <Image source={source} style={{ width: w, height: w / ratio, borderRadius: w * 0.045 }} resizeMode="contain" />
+      {children}
+    </Pressable>
+  );
+}
+
 /** Card inspector: what the card is, what it does, and (if it would fire)
  * your class ability. Tap-to-inspect opens this; "Play" routes to the normal
  * play flow when the server says the card is playable. */
@@ -254,25 +280,48 @@ export function CardDetail({
 }) {
   const info = cardInfo(id);
   const help = cardHelp(id, classId);
+  const [showRules, setShowRules] = useState(false);
+  const art = cardArt(id);
+
+  const rulesPanel = (
+    <>
+      <Text style={s.detailTitle}>
+        {(info.color ?? "wild").toUpperCase()} {info.label}
+      </Text>
+      <Text style={s.detailText}>{help.generic}</Text>
+      {help.ability ? (
+        <View style={s.detailAbility}>
+          <Text style={s.detailAbilityName}>✦ Your ability: {help.ability.name}</Text>
+          <Text style={s.detailText}>{help.ability.text}</Text>
+        </View>
+      ) : null}
+      {!playable ? <Text style={[s.detailText, { color: theme.dim }]}>Not playable right now.</Text> : null}
+    </>
+  );
+
+  if (art) {
+    return (
+      <ArtLightbox source={art} ratio={CARD_ART_RATIO} onClose={onClose}>
+        <Pressable onPress={() => {}} style={{ flexDirection: "row", gap: 8, marginTop: 12 }}>
+          {playable ? <Btn label={playLabel} kind="primary" onPress={onPlay} /> : null}
+          <Btn label={showRules ? "Hide rules" : "ⓘ Rules"} kind="ghost" onPress={() => setShowRules((v) => !v)} />
+        </Pressable>
+        {showRules ? (
+          <Pressable style={[s.detailBox, { position: "absolute", alignSelf: "center", top: "16%" }]} onPress={() => {}}>
+            {rulesPanel}
+          </Pressable>
+        ) : null}
+      </ArtLightbox>
+    );
+  }
+
   return (
     <Pressable style={s.detailOverlay} onPress={onClose}>
       <Pressable style={s.detailBox} onPress={() => {}}>
         <View style={{ flexDirection: "row", gap: 12, alignItems: "center" }}>
           <CardView id={id} />
-          <View style={{ flex: 1 }}>
-            <Text style={s.detailTitle}>
-              {(info.color ?? "wild").toUpperCase()} {info.label}
-            </Text>
-            <Text style={s.detailText}>{help.generic}</Text>
-          </View>
+          <View style={{ flex: 1 }}>{rulesPanel}</View>
         </View>
-        {help.ability ? (
-          <View style={s.detailAbility}>
-            <Text style={s.detailAbilityName}>✦ Your ability: {help.ability.name}</Text>
-            <Text style={s.detailText}>{help.ability.text}</Text>
-          </View>
-        ) : null}
-        {!playable ? <Text style={[s.detailText, { color: theme.dim }]}>Not playable right now.</Text> : null}
         <View style={{ flexDirection: "row", gap: 8, justifyContent: "center", marginTop: 12 }}>
           {playable ? <Btn label={playLabel} kind="primary" onPress={onPlay} /> : null}
           <Btn label="Close" kind="ghost" onPress={onClose} />

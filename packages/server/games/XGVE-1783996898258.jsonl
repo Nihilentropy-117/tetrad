@@ -1,0 +1,3 @@
+{"header":true,"seed":"97ace276-bb03-4db2-a6da-d64c5750b393","config":{"mode":"ffa","players":[{"id":"p0","name":"Alice"},{"id":"p1","name":"Bob"}],"dealerSeat":1}}
+{"type":"chooseClass","player":"p0","classId":"thief"}
+{"type":"chooseClass","player":"p1","classId":"thief"}

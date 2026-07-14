@@ -1,10 +1,11 @@
 // Pre-game screens: connect/create/join, lobby, class select.
 
 import React, { useEffect, useState } from "react";
-import { Pressable, ScrollView, StyleSheet, Text, TextInput, View } from "react-native";
-import { Btn, ColorChip, theme } from "./components";
+import { Image, Pressable, ScrollView, StyleSheet, Text, TextInput, View } from "react-native";
+import { ArtLightbox, Btn, ColorChip, theme } from "./components";
 import { defaultServerUrl, loadSession, useGame } from "./store";
 import { ABILITY_TEXT, CLASS_META } from "./types";
+import { classArt, CLASS_ART_RATIO } from "./art";
 
 export function ConnectScreen() {
   const { st, create, join, rejoin } = useGame();
@@ -190,8 +191,11 @@ export function ClassSelectScreen() {
   const choices = game.legal.filter((l) => l.type === "chooseClass");
   const spectating = !game.view.players.some((p) => p.id === you);
   const picked = choices.length === 0;
+  const [zoomClass, setZoomClass] = useState<string | null>(null);
+  const zoomArt = zoomClass ? classArt(zoomClass) : undefined;
 
   return (
+    <View style={{ flex: 1, backgroundColor: theme.bg }}>
     <ScrollView style={s.root} contentContainerStyle={s.center}>
       <Text style={s.logo}>{spectating ? "class select" : "choose your class"}</Text>
       <Text style={s.tag}>picks are hidden until everyone locks in</Text>
@@ -209,6 +213,11 @@ export function ClassSelectScreen() {
             if (!meta) return null;
             return (
               <View key={c.classId} style={s.classCard}>
+                {classArt(c.classId!) ? (
+                  <Pressable onPress={() => setZoomClass(c.classId!)}>
+                    <Image source={classArt(c.classId!)!} style={s.classArt} resizeMode="contain" />
+                  </Pressable>
+                ) : null}
                 <View style={{ flexDirection: "row", alignItems: "center", gap: 8 }}>
                   <ColorChip color={meta.color} />
                   <Text style={s.className}>{meta.name}</Text>
@@ -240,6 +249,8 @@ export function ClassSelectScreen() {
         </View>
       )}
     </ScrollView>
+    {zoomArt ? <ArtLightbox source={zoomArt} ratio={CLASS_ART_RATIO} onClose={() => setZoomClass(null)} /> : null}
+    </View>
   );
 }
 
@@ -280,6 +291,9 @@ const s = StyleSheet.create({
     width: 230,
     gap: 8,
   },
+  // explicit height: RN-web doesn't map aspectRatio to CSS, and without it
+  // the Image falls back to the PNG's intrinsic 1500px height
+  classArt: { width: "100%", height: 206 / CLASS_ART_RATIO, borderRadius: 8 },
   className: { color: theme.text, fontWeight: "800", fontSize: 15 },
   classBlurb: { color: theme.dim, fontSize: 11 },
   statsRow: { flexDirection: "row", flexWrap: "wrap", gap: 8 },
