@@ -1,7 +1,8 @@
 import { describe, expect, it } from "vitest";
-import { buildDeck, card, defenderMin, matchesField, scriptedRng, seedFromString } from "../src/index.js";
+import { applyAction, buildDeck, card, defenderMin, matchesField, scriptedRng, seedFromString } from "../src/index.js";
 import { rollD6 } from "../src/rng.js";
 import { initialState } from "../src/index.js";
+import { assertConservation, hand, okEv, setup } from "./helpers.js";
 
 describe("deck composition (Q1 / D1)", () => {
   const deck = buildDeck();
@@ -65,6 +66,32 @@ describe("rng determinism", () => {
   it("hashes seeds stably", () => {
     expect(seedFromString("tetrad")).toBe(seedFromString("tetrad"));
     expect(seedFromString("tetrad")).not.toBe(seedFromString("tetrad2"));
+  });
+});
+
+describe("draw pile reshuffle (T10)", () => {
+  it("drawing on an empty pile recycles field pile (minus top) + under-pile", () => {
+    let s = setup(["zerker", "paladin"], { field: "red-9-a" });
+    const cards = s.drawPile.splice(0, s.drawPile.length);
+    s.field.pile.push(...cards.slice(0, 30));
+    s.field.underPile.push(...cards.slice(30));
+    const top = s.field.pile[s.field.pile.length - 1];
+    const { s: after, events } = okEv(applyAction(s, { type: "drawCard", player: "p0" }));
+    expect(events.some((e) => e.type === "DeckReshuffled")).toBe(true);
+    expect(hand(after, "p0").length).toBe(8);
+    expect(after.field.pile).toEqual([top]); // the top card stays in play
+    assertConservation(after);
+  });
+
+  it("refills eagerly when the last card is drawn, so the pile never rests at 0", () => {
+    let s = setup(["zerker", "paladin"], { field: "red-9-a" });
+    const cards = s.drawPile.splice(0, s.drawPile.length - 1); // leave exactly 1
+    s.field.underPile.push(...cards);
+    const { s: after, events } = okEv(applyAction(s, { type: "drawCard", player: "p0" }));
+    expect(events.some((e) => e.type === "DeckReshuffled")).toBe(true);
+    expect(hand(after, "p0").length).toBe(8);
+    expect(after.drawPile.length).toBeGreaterThan(0);
+    assertConservation(after);
   });
 });
 

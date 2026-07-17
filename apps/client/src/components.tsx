@@ -179,6 +179,13 @@ export function PlayerPanel({
         {p.status === "active" ? `${p.handCount} cards` : p.status.toUpperCase()}
         {p.statuses.length > 0 ? ` · ${p.statuses.map((x) => x.key).join(", ")}` : ""}
       </Text>
+      {!isYou && p.hand && p.hand.length > 0 ? (
+        <View style={{ flexDirection: "row", flexWrap: "wrap", marginTop: 4 }}>
+          {p.hand.map((c, i) => (
+            <CardView key={`${c}-${i}`} id={c} small />
+          ))}
+        </View>
+      ) : null}
     </Pressable>
   );
 }
