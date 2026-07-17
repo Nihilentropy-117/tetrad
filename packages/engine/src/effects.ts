@@ -464,23 +464,33 @@ export const CUSTOMS: Record<string, Handler> = {
     if (op.phase !== "assign") {
       op.phase = "assign";
       op.cards = [];
+      op.picks = [];
       for (let i = 0; i < 2; i++) {
         ensureDrawPile(ctx);
         if (s.drawPile.length === 0) break;
         op.cards.push(s.drawPile.pop());
       }
       s.staging.push(...(op.cards as string[]));
-      if ((op.cards as string[]).length === 0) return;
+    } else if (choice !== undefined) {
+      const ok = s.players.some((p) => p.id === choice && p.status === "active");
+      (op.picks as PlayerId[]).push(ok ? (choice as PlayerId) : (op.actor as PlayerId));
+    }
+    const cards = op.cards as string[];
+    const picks = op.picks as PlayerId[];
+    if (picks.length < cards.length) {
+      // one decision per card so both may go to the same player
+      const c = card(cards[picks.length]);
+      const label = `${c.color ?? "wild"} ${c.number ?? c.kind}`;
+      const opts = s.players.filter((p) => p.status === "active").map((p) => p.id);
       return decision(
         ctx,
         op.actor,
         "fateAssign",
-        "Assign each drawn card to a player",
-        (op.cards as string[]).map(() => op.actor)
+        `Fate Maker: give the drawn ${label} (${picks.length + 1} of ${cards.length}) to whom? (8 dmg per card unless you keep it)`,
+        op.actor,
+        opts
       );
     }
-    const cards = op.cards as string[];
-    const picks = (choice as PlayerId[]) ?? [];
     const counts = new Map<PlayerId, number>();
     cards.forEach((c, i) => {
       const to =
@@ -638,7 +648,7 @@ export const CUSTOMS: Record<string, Handler> = {
     if (op.phase === "noop") return;
     if (op.phase === "drawn" && choice === undefined) {
       const hand = player(s, op.actor).hand;
-      return decision(ctx, op.actor, "discard2", "Discard 2 cards", hand.slice(0, 2));
+      return decision(ctx, op.actor, "discard2", "Discard 2 cards", hand.slice(0, 2), [...hand]);
     }
     const hand = player(s, op.actor).hand;
     const picks = ((choice as string[]) ?? []).filter((c) => hand.includes(c)).slice(0, 2);

@@ -120,6 +120,12 @@ export function fmtEvent(e: GameEvent, view: PlayerView, selfLabel = "YOU"): str
       return `${p(e.a)} and ${p(e.b)} swap hands`;
     case "DeckReshuffled":
       return `deck reshuffled (${e.size} cards)`;
+    case "ArcaneInfluence":
+      return `${p(e.by)} warps ${p(e.roller)}'s roll: ${e.from} -> ${e.to} (Arcane Influence)`;
+    case "CardsRevealed": {
+      const list = (e.cards as string[]).map((c) => cardName(c)).join(", ");
+      return `${p(e.from)} reveals to ${p(e.to)}: ${list || "no matching cards"}`;
+    }
     case "DecisionRequested":
     case "TurnEnded":
     case "ClassChosen":
