@@ -44,6 +44,9 @@ export function rollSum(ctx: Ctx, roller: PlayerId, n: number, kind: RollKind): 
   for (let i = 0; i < n; i++) faces.push(rollD6(s));
   let total = faces.reduce((a, b) => a + b, 0);
 
+  // Show the original roll first so influence adjustments are auditable.
+  ctx.events.push({ type: "DiceRolled", roller, kind, faces, total });
+
   // SO-A Arcane Influence: every active influence adjusts by ±2 (M6 default).
   for (const e of s.effects) {
     if (e.key !== "arcaneInfluence") continue;
@@ -56,7 +59,6 @@ export function rollSum(ctx: Ctx, roller: PlayerId, n: number, kind: RollKind): 
     }
   }
 
-  ctx.events.push({ type: "DiceRolled", roller, kind, faces, total });
   return total;
 }
 

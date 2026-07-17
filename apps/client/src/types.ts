@@ -364,6 +364,14 @@ export function fmtEvent(e: GameEvent, you: string, view: PlayerView | null): st
       return `${p(e.a)} and ${p(e.b)} swap hands!`;
     case "RollFailed":
       return `${p(e.roller)}'s roll auto-fails (${e.reason})`;
+    case "ArcaneInfluence":
+      return `✨ ${p(e.by)} ${v(e.by, "warps", "warp")} ${p(e.roller)}'s roll: ${e.from} → ${e.to} (Arcane Influence)`;
+    case "CardsRevealed": {
+      const list = (e.cards as string[])
+        .map((c) => `${cardInfo(c).color ?? "wild"} ${cardInfo(c).label}`)
+        .join(", ");
+      return `${p(e.from)} ${v(e.from, "reveals", "reveal")} to ${p(e.to)}: ${list || "no matching cards"}`;
+    }
     case "WishRolled":
       return `${p(e.player)} ${v(e.player, "wishes", "wish")}… rolled ${e.roll}`;
     case "RageContinued":
