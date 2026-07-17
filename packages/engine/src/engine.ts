@@ -1330,6 +1330,9 @@ export function applyAction(state: GameState, action: Action): Reply {
   try {
     handle(ctx, action);
     drain(ctx);
+    // T10, eagerly: refill the moment the pile empties so the deck never
+    // sits at 0 between turns while recyclable cards exist.
+    if (s.drawPile.length === 0) ensureDrawPile(ctx);
   } catch (err) {
     if (err instanceof RuleError) {
       return { ok: false, error: { code: err.code, message: err.message } };

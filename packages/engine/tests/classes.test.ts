@@ -1,7 +1,7 @@
 // Class ability scenarios with scripted dice (rule IDs in test names).
 
 import { describe, expect, it } from "vitest";
-import { applyAction } from "../src/index.js";
+import { applyAction, redact } from "../src/index.js";
 import { act, assertConservation, decide, hand, hp, play, script, setup, statuses } from "./helpers.js";
 
 describe("Warlock", () => {
@@ -114,6 +114,29 @@ describe("Scout", () => {
     expect(hand(s, "p0")).toContain(c3);
     expect(s.drawPile[s.drawPile.length - 1]).toBe(c1); // next draw = c1
     expect(s.drawPile[s.drawPile.length - 2]).toBe(c2);
+    assertConservation(s);
+  });
+
+  it("SC-0 Battlefield Intelligence: enemies' hands revealed for 2 color changes", () => {
+    let s = setup(["scout", "paladin"], {
+      field: "green-9-a",
+      hands: {
+        p0: ["green-0-a", "yellow-3-b", "red-5-a", "red-1-a"],
+        p1: ["green-3-a", "yellow-5-a", "blue-7-a"],
+      },
+    });
+    s = play(s, "p0", "green-0-a", { attackTarget: "p1" });
+    expect(statuses(s, "p1")).toContain("revealed");
+    // scout's view now includes the enemy hand; the enemy still can't see scout's
+    expect(redact(s, "p0").players.find((p) => p.id === "p1")?.hand).toEqual(hand(s, "p1"));
+    expect(redact(s, "p1").players.find((p) => p.id === "p0")?.hand).toBeUndefined();
+    s = play(s, "p1", "green-3-a"); // no color change
+    s = play(s, "p0", "yellow-3-b"); // color change 1
+    expect(redact(s, "p0").players.find((p) => p.id === "p1")?.hand).toEqual(hand(s, "p1"));
+    s = play(s, "p1", "yellow-5-a");
+    s = play(s, "p0", "red-5-a"); // color change 2 — reveal expires
+    expect(statuses(s, "p1")).not.toContain("revealed");
+    expect(redact(s, "p0").players.find((p) => p.id === "p1")?.hand).toBeUndefined();
     assertConservation(s);
   });
 });
