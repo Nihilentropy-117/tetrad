@@ -1,8 +1,8 @@
 // Class ability scenarios with scripted dice (rule IDs in test names).
 
 import { describe, expect, it } from "vitest";
-import { applyAction, redact } from "../src/index.js";
-import { act, assertConservation, decide, hand, hp, play, script, setup, statuses } from "./helpers.js";
+import { applyAction, legalActions, redact } from "../src/index.js";
+import { act, assertConservation, decide, hand, hp, okEv, play, script, setup, statuses } from "./helpers.js";
 
 describe("Warlock", () => {
   it("WL-1 Life Drain: damage 2d6+1 and heal for the damage done", () => {
@@ -83,6 +83,32 @@ describe("Sorcerer", () => {
     script(s, [4]);
     s = play(s, "p0", "red-2-a"); // off-color plain card, bonus applies anyway
     expect(hp(s, "p1")).toBe(110 - (4 + 3));
+  });
+
+  it("SO-C Dispel Magic: the target's own plays never trigger it (M15)", () => {
+    let s = setup(["sorcerer", "zerker"], {
+      field: "blue-5-a",
+      hands: { p0: ["blue-counter-a", "blue-3-a", "green-2-a"], p1: ["blue-9-a", "red-7-a"] },
+    });
+    script(s, [4, 4, 2]); // 2d6=8 → "number" branch; attack roll 2
+    s = play(s, "p0", "blue-counter-a", { targets: ["p0"] }); // ward himself
+    expect(statuses(s, "p0")).toContain("dispel");
+    expect(hp(s, "p1")).toBe(110 - (2 + 3)); // retained attack still lands
+
+    s = act(s, { type: "drawCard", player: "p1" });
+    s = act(s, { type: "endTurn", player: "p1" });
+
+    // the sorcerer's own numbered card resolves normally and leaves the ward armed
+    script(s, [2]);
+    s = play(s, "p0", "blue-3-a");
+    expect(hp(s, "p1")).toBe(110 - (2 + 3) - (2 + 3));
+    expect(statuses(s, "p0")).toContain("dispel");
+
+    // another player's numbered card IS negated against the warded target
+    const { s: s2, events } = okEv(applyAction(s, { type: "playCard", player: "p1", card: "blue-9-a" }));
+    expect(events.some((e) => e.type === "CardDispelled")).toBe(true);
+    expect(hp(s2, "p0")).toBe(80); // untouched
+    expect(statuses(s2, "p0")).not.toContain("dispel"); // consumed
   });
 
   it("SO-I Fireball: 30 split equally, everyone draws 2 (replaces the draw-4)", () => {
@@ -217,6 +243,56 @@ describe("Thief", () => {
     s = play(s, "p0", "green-7-a");
     expect(hp(s, "p1")).toBe(110 - (2 + 7)); // attack rolled normally
     expect(statuses(s, "p0")).toContain("loadedDice"); // still armed for the next roll
+  });
+
+  it("TH-I It's Not Cheating: the declared color must keep the play legal (M13)", () => {
+    let s = setup(["thief", "zerker"], {
+      field: "red-5-a",
+      hands: { p0: ["wild-inspiration-a", "yellow-7-a", "red-5-b"], p1: ["blue-5-a", "red-9-a"] },
+    });
+    script(s, [1]);
+    s = play(s, "p0", "wild-inspiration-a", { chosenColor: "blue", targets: ["p1"] });
+    expect(statuses(s, "p0")).toContain("chameleon");
+    script(s, [1, 1]);
+    s = play(s, "p1", "blue-5-a"); // field: blue 5
+
+    // server hints: the non-matching yellow 7 can only be declared blue;
+    // the number-matching red 5 may be declared any color
+    const specs = legalActions(s, "p0");
+    const seven = specs.find((a) => a.type === "playCard" && a.card === "yellow-7-a");
+    expect(seven?.needs?.extra).toBe("declaredColor");
+    expect(seven?.needs?.declareColors).toEqual(["blue"]);
+    const five = specs.find((a) => a.type === "playCard" && a.card === "red-5-b");
+    expect(five?.needs?.declareColors).toEqual(["red", "blue", "green", "yellow"]);
+
+    // yellow 7 on blue 5: neither color nor number matches the declaration
+    let r = applyAction(s, { type: "playCard", player: "p0", card: "yellow-7-a", declaredColor: "yellow" });
+    expect(r.ok).toBe(false);
+    r = applyAction(s, { type: "playCard", player: "p0", card: "yellow-7-a" });
+    expect(r.ok).toBe(false);
+
+    // red 5 declared yellow: number matches, so the declaration recolors the field
+    script(s, [1]);
+    s = play(s, "p0", "red-5-b", { declaredColor: "yellow" });
+    expect(s.field.activeColor).toBe("yellow");
+    expect(s.field.activeNumber).toBe(5);
+    expect(statuses(s, "p0")).not.toContain("chameleon");
+  });
+
+  it("TH-I It's Not Cheating: a non-matching card is playable by declaring the field color", () => {
+    let s = setup(["thief", "zerker"], {
+      field: "red-5-a",
+      hands: { p0: ["wild-inspiration-a", "yellow-7-a", "red-5-b"], p1: ["blue-5-a", "red-9-a"] },
+    });
+    script(s, [1]);
+    s = play(s, "p0", "wild-inspiration-a", { chosenColor: "blue", targets: ["p1"] });
+    script(s, [1, 1]);
+    s = play(s, "p1", "blue-5-a"); // field: blue 5
+    script(s, [1]);
+    s = play(s, "p0", "yellow-7-a", { declaredColor: "blue" });
+    expect(s.field.activeColor).toBe("blue");
+    expect(s.field.activeNumber).toBe(7);
+    expect(statuses(s, "p0")).not.toContain("chameleon");
   });
 });
 

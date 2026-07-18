@@ -192,7 +192,7 @@ export const ABILITY_TEXT: Record<string, Record<string, { name: string; text: s
     "6": { name: "Paradoxal Whims", text: "Shuffle the field pile into the deck; reveal a new field card and resolve it as if you played it. Can chain endlessly." },
     "8": { name: "Shock & Draw", text: "2d6+3 to a target; the next enemy takes half; the one after draws a card." },
     "0": { name: "Wish", text: "Roll 2d6 once, then pick targets: 2–4 swap hands; 5–7 heal 10d6+3 or deal 5d6+3; 8–10 they take 3 less damage; 11–12 pick any option." },
-    counter: { name: "Dispel Magic", text: "Roll 2d6: 2–6 the next special card has no effect on a target; 7 your choice; 8–12 the next numbered ability is negated." },
+    counter: { name: "Dispel Magic", text: "Roll 2d6: 2–6 the next special card another player plays has no effect on the target; 7 your choice; 8–12 the next numbered card. The target's own plays never trigger it." },
     advantage: { name: "Arcane Influence", text: "Until color change, adjust any dice roll by up to ±2 — after seeing it." },
     rally: { name: "Fate Maker", text: "Draw 2 and assign each card to any player; each recipient takes 8 damage per card (you may keep either damage-free)." },
     inspiration: { name: "Fireball", text: "All enemies split 30 damage equally, then each draws 2 (replaces the draw-4)." },
@@ -207,7 +207,7 @@ export const ABILITY_TEXT: Record<string, Record<string, { name: string; text: s
     stun: { name: "Rigged Game", text: "Pick a card from your hand; the target guesses its color. Right: they take the card. Wrong: stunned 2 turns." },
     advantage: { name: "Surprise!", text: "The next player to change the color takes 1d6+7." },
     rally: { name: "Sleight of Hand", text: "Target draws only 1 (instead of 2); you may give them 1 card from your hand." },
-    inspiration: { name: "It's Not Cheating", text: "Declare any color for the next card you play; it otherwise works as normal. Target draws 4." },
+    inspiration: { name: "It's Not Cheating", text: "Declare a color for the next card you play — the declared color must make it a legal play, and it becomes the new active color. Target draws 4." },
   },
   scout: {
     "2": { name: "Lucky Break", text: "Heal 1d6+4; every 6 rolled explodes into another 1d6." },

@@ -54,6 +54,9 @@ export interface ActionSpec {
     attackTarget?: boolean;
     chosenColor?: boolean;
     extra?: string;
+    /** chameleon: colors this card may legally be declared as (required when
+     * extra is "declaredColor"; optional otherwise) */
+    declareColors?: Color[];
   };
   decisionId?: string;
   classId?: ClassId;
