@@ -1,11 +1,12 @@
 // Server-computed legal-action hints (§3.3). The client renders exactly this;
 // it never re-derives rules.
 
-import { card, isWild } from "./cards.js";
+import { card, effectiveNumber, isWild } from "./cards.js";
 import { CLASSES } from "./classes/index.js";
 import { abilityFor, actingPlayer, canPlayCard, isCardLocked } from "./engine.js";
 import { matchesField } from "./cards.js";
 import { player, statusesByKey } from "./state.js";
+import { COLORS } from "./types.js";
 import type { ActionSpec, ClassId, GameState, PlayerId } from "./types.js";
 
 export function legalActions(s: GameState, playerId: PlayerId): ActionSpec[] {
@@ -34,6 +35,18 @@ export function legalActions(s: GameState, playerId: PlayerId): ActionSpec[] {
     if (!matches && !chameleon) continue;
     if (!canPlayCard(s, playerId, c)) continue;
     const ability = abilityFor(s, playerId, def);
+    // TH-I/M13: the declared color drives matching, so a non-matching card can
+    // only be declared as the field color, while a number match frees the pick.
+    const numberMatches =
+      effectiveNumber(def) !== null && effectiveNumber(def) === s.field.activeNumber;
+    const declareColors =
+      chameleon && !isWild(def)
+        ? numberMatches
+          ? [...COLORS]
+          : !matches
+            ? [s.field.activeColor]
+            : undefined
+        : undefined;
     out.push({
       type: "playCard",
       card: c,
@@ -42,6 +55,7 @@ export function legalActions(s: GameState, playerId: PlayerId): ActionSpec[] {
         attackTarget: !!ability && (ability.spec.attack === "grant" || ability.spec.attack === "retain"),
         chosenColor: isWild(def),
         extra: !matches && chameleon ? "declaredColor" : ability?.spec.extra,
+        declareColors,
       },
     });
   }

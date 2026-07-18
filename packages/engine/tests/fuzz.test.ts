@@ -123,7 +123,9 @@ function specToAction(s: GameState, actor: PlayerId, spec: ActionSpec, rnd: () =
         a.chosenColor = pick(rnd, ["red", "blue", "green", "yellow"] as const);
       }
       if (needs.extra === "declaredColor") {
-        a.declaredColor = pick(rnd, ["red", "blue", "green", "yellow"] as const);
+        a.declaredColor = pick(rnd, needs.declareColors ?? ["red", "blue", "green", "yellow"]);
+      } else if (needs.declareColors && rnd() < 0.3) {
+        a.declaredColor = pick(rnd, needs.declareColors);
       }
       // ability-specific extras
       const def = card(spec.card!);

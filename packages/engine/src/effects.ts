@@ -164,7 +164,6 @@ const NEGATIVE_KEYS = new Set([
   "cursedEyes",
   "hex",
   "flameStrike",
-  "dispel",
   "banished",
 ]);
 

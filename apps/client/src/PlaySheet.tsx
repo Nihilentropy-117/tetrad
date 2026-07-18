@@ -93,14 +93,14 @@ export function PlaySheet({
     onSubmit(a);
   };
 
-  const colorRow = (value: string | null, set: (c: string) => void) => (
+  const colorRow = (value: string | null, set: (c: string | null) => void, allowed?: readonly string[], clearable = false) => (
     <View style={s.row}>
-      {COLORS.map((c) => (
+      {(allowed ?? COLORS).map((c) => (
         <Btn
           key={c}
           label={c}
           kind={value === c ? "primary" : "normal"}
-          onPress={() => set(c)}
+          onPress={() => set(clearable && value === c ? null : c)}
         />
       ))}
     </View>
@@ -160,10 +160,14 @@ export function PlaySheet({
           </>
         ) : null}
 
-        {needsDeclared ? (
+        {needsDeclared || needs.declareColors ? (
           <>
-            <Text style={s.section}>Declare a color (It's Not Cheating)</Text>
-            {colorRow(declaredColor, setDeclaredColor)}
+            <Text style={s.section}>
+              {needsDeclared
+                ? "Declare a color (It's Not Cheating)"
+                : "Declare a color (It's Not Cheating — optional)"}
+            </Text>
+            {colorRow(declaredColor, setDeclaredColor, needs.declareColors, !needsDeclared)}
           </>
         ) : null}
 

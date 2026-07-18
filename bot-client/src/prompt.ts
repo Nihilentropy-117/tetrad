@@ -49,8 +49,13 @@ function describeSpec(spec: ActionSpec, view: PlayerView): string {
   if (spec.needs?.targets) needs.push(describeTargets(spec.needs.targets));
   if (spec.needs?.attackTarget) needs.push("attackTarget: player id to aim your attack at");
   if (spec.needs?.chosenColor) needs.push("chosenColor: new active color");
-  if (spec.needs?.extra === "declaredColor") needs.push("declaredColor: the color you declare this card to be");
-  else if (spec.needs?.extra) needs.push(`extra: { ${spec.needs.extra} }`);
+  if (spec.needs?.extra === "declaredColor") {
+    needs.push(`declaredColor: the color you declare this card to be (must be one of: ${(spec.needs.declareColors ?? []).join(", ") || "any"})`);
+  } else if (spec.needs?.extra) {
+    needs.push(`extra: { ${spec.needs.extra} }`);
+  } else if (spec.needs?.declareColors) {
+    needs.push(`declaredColor (optional): declare this card as any of: ${spec.needs.declareColors.join(", ")} — it becomes the new active color`);
+  }
   return needs.length ? `${desc} — needs ${needs.join("; ")}` : desc;
 }
 

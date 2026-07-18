@@ -131,6 +131,27 @@ function autofillTargets(ctx: Ctx, actor: PlayerId, spec: TargetSpec | undefined
 }
 
 // ---------------------------------------------------------------------------
+// SO-C Dispel Magic (M15)
+// ---------------------------------------------------------------------------
+
+/** True if the card currently resolving is dispelled against `tgt`: `src`
+ * played a qualifying card and `tgt` carries the ward. Consumes the status on
+ * the first blocked effect; the whole card stays negated against `tgt`. */
+function dispelBlocks(ctx: Ctx, src: PlayerId, tgt: PlayerId): boolean {
+  const arms = ctx.s.scratch.dispelArms as
+    | { id: string; owner: PlayerId; actor: PlayerId; card: string }[]
+    | undefined;
+  const arm = arms?.find((a) => a.actor === src && a.owner === tgt);
+  if (!arm) return false;
+  const st = ctx.s.effects.find((e) => e.id === arm.id);
+  if (st) {
+    removeStatus(ctx, st, "triggered");
+    ctx.events.push({ type: "CardDispelled", player: tgt, by: src, card: arm.card });
+  }
+  return true;
+}
+
+// ---------------------------------------------------------------------------
 // Ill-effect gate (SP10 / PR-5 / PR-7 / TH-9 / SC-4)
 // ---------------------------------------------------------------------------
 
@@ -296,7 +317,6 @@ const OPS: Record<string, OpHandler> = {
 
     // ability determination + suppressions
     let ability = abilityFor(s, actor, def);
-    let suppressed = false;
     if (ability && def.kind === "number" && def.number !== 0) {
       // PA-8 Even the Odds
       const armed = s.effects.find((e) => e.armed?.on === "numberAbilityResolving");
@@ -306,18 +326,22 @@ const OPS: Record<string, OpHandler> = {
         ability = null;
       }
     }
-    // SO-C dispel (on the player of the card)
-    const dispel = statusesByKey(s, actor, "dispel")[0];
-    if (dispel) {
-      const isSpecial = def.kind !== "number" || def.number === 0;
-      const branch = dispel.data.branch as string;
-      if ((branch === "special" && isSpecial) || (branch === "number" && !isSpecial)) {
-        removeStatus(ctx, dispel, "triggered");
-        ctx.events.push({ type: "CardDispelled", player: actor, card: op.cardId });
-        suppressed = true;
-        ability = null;
-      }
-    }
+    // SO-C dispel: a qualifying card played by anyone OTHER than the warded
+    // player is negated against that player only (M15). The owner's own plays
+    // never trigger it. Arm the matches here; the dmg/stun/status/draw ops
+    // consult dispelBlocks() as this card's effects land.
+    const isSpecial = def.kind !== "number" || def.number === 0;
+    const dispelArms = s.effects
+      .filter(
+        (e) =>
+          e.key === "dispel" &&
+          e.owner !== "global" &&
+          e.owner !== actor &&
+          ((e.data.branch === "special" && isSpecial) || (e.data.branch === "number" && !isSpecial))
+      )
+      .map((e) => ({ id: e.id, owner: e.owner as PlayerId, actor, card: op.cardId as string }));
+    if (dispelArms.length > 0) s.scratch.dispelArms = dispelArms;
+    else delete s.scratch.dispelArms;
 
     const withColor = colorBonusApplies(ctx, actor, def.color, wildOrZero);
     const cardCtx = { withColor };
@@ -354,13 +378,12 @@ const OPS: Record<string, OpHandler> = {
             ops.push(...fx);
             if (withAttack) ops.push(mkAttack(attackTarget ?? undefined));
           }
-        } else if (!suppressed) {
+        } else {
           ops.push(mkAttack()); // T4: plain play → attack next enemy
         }
         break;
       }
       case "stun": {
-        if (suppressed) break;
         if (ability && spec) {
           // SP1: class stun — targeted; attack goes to t0
           ops.push(...fxOps(ctx, actor, effects, targets, { extra: op.extra as any }));
@@ -375,7 +398,6 @@ const OPS: Record<string, OpHandler> = {
         break;
       }
       case "counter": {
-        if (suppressed) break;
         s.turn.direction = s.turn.direction === 1 ? -1 : 1; // SP2: always reverses
         ctx.events.push({ type: "OrderReversed", direction: s.turn.direction });
         const comeback = player(s, actor).lastHitBy;
@@ -389,7 +411,6 @@ const OPS: Record<string, OpHandler> = {
         break;
       }
       case "rally": {
-        if (suppressed) break;
         if (ability && spec) {
           const rallyVictim = targets[0];
           const attackTo = spec.rallyAttackTo === "free" ? attackTarget ?? nextEnemy(s, actor) ?? undefined : rallyVictim;
@@ -413,7 +434,6 @@ const OPS: Record<string, OpHandler> = {
         break;
       }
       case "advantage": {
-        if (suppressed) break;
         if (spec) {
           ops.push(...fxOps(ctx, actor, effects, targets, { extra: op.extra as any }));
           if (spec.attack !== "none" && spec.attack !== "replace") ops.push(mkAttack(attackTarget));
@@ -421,7 +441,6 @@ const OPS: Record<string, OpHandler> = {
         break;
       }
       case "inspiration": {
-        if (suppressed) break;
         if (spec) {
           ops.push(...fxOps(ctx, actor, effects, targets, { extra: op.extra as any }));
           if (!spec.replacesInspirationDraw) {
@@ -605,6 +624,7 @@ const OPS: Record<string, OpHandler> = {
     // ---- apply ----
     if (src === tgt) return; // A5
     if (player(s, tgt).status !== "active") return;
+    if ((op.kind === "attack" || op.kind === "ability") && dispelBlocks(ctx, src, tgt)) return; // SO-C
 
     let usedColorBonus = false;
     let amount: number;
@@ -769,6 +789,7 @@ const OPS: Record<string, OpHandler> = {
     const src = op.src as PlayerId;
     if (src === tgt) return; // A5
     if (player(s, tgt).status !== "active") return;
+    if (dispelBlocks(ctx, src, tgt)) return; // SO-C
     const gate = illGate(ctx, tgt);
     if (gate.blocked) return;
     tgt = gate.tgt;
@@ -792,6 +813,7 @@ const OPS: Record<string, OpHandler> = {
     const s = ctx.s;
     let p = op.p as PlayerId;
     if (player(s, p).status !== "active") return;
+    if (op.forced && op.src && op.phase === undefined && dispelBlocks(ctx, op.src as PlayerId, p)) return; // SO-C
     if (op.forced && op.phase === undefined) {
       const gate = illGate(ctx, p); // forced draws are ill effects (SP10)
       if (gate.blocked) return;
@@ -868,7 +890,7 @@ const OPS: Record<string, OpHandler> = {
     const spec = op.spec as any;
     if (tgt !== "global") {
       if (player(s, tgt).status !== "active") return;
-      const negative = !!spec.ill || !!spec.mods?.curse || ["taunt", "delirium", "dispel", "guidingBolt"].includes(spec.key);
+      const negative = !!spec.ill || !!spec.mods?.curse || ["taunt", "delirium", "guidingBolt"].includes(spec.key);
       // KN-2 reflect for negative ability statuses
       if (op.phase === undefined && negative && tgt !== src) {
         op.phase = "applied";
@@ -895,6 +917,7 @@ const OPS: Record<string, OpHandler> = {
       }
       if (tgt === src && (spec.ill || spec.mods?.curse) && src !== op.src) return;
     }
+    if (tgt !== "global" && tgt !== src && dispelBlocks(ctx, src, tgt)) return; // SO-C
     addStatus(ctx, src, tgt, spec);
   },
 
@@ -1241,8 +1264,17 @@ function handle(ctx: Ctx, action: Action): void {
       if (!p.hand.includes(action.card)) fail("notInHand", "card not in hand");
       if (isCardLocked(s, actor, action.card)) fail("cardLocked", "that card is locked by a curse");
       const def = card(action.card);
-      if (action.declaredColor && statusesByKey(s, actor, "chameleon").length === 0) {
-        fail("badDeclare", "no effect allows declaring a color");
+      if (action.declaredColor) {
+        if (statusesByKey(s, actor, "chameleon").length === 0) {
+          fail("badDeclare", "no effect allows declaring a color");
+        }
+        if (isWild(def)) fail("badDeclare", "wilds choose a color instead of declaring one");
+        if (!COLORS.includes(action.declaredColor)) fail("badDeclare", "unknown color");
+        // M13: the declared color drives matching — the play must still be legal
+        // as the declared color (same color as the field, or same number).
+        if (!matchesField({ ...def, color: action.declaredColor }, s.field.activeColor, s.field.activeNumber)) {
+          fail("noMatch", "declared color must match the field color, or the numbers must match (M13)");
+        }
       }
       if (!isWild(def) && !action.declaredColor && !matchesField(def, s.field.activeColor, s.field.activeNumber)) {
         fail("noMatch", "card does not match the field (T2)");

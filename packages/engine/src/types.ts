@@ -333,6 +333,9 @@ export interface ActionSpec {
     attackTarget?: boolean;
     chosenColor?: boolean;
     extra?: string;
+    /** TH-I chameleon: colors this card may legally be declared as (M13).
+     * Required when extra is "declaredColor"; optional otherwise. */
+    declareColors?: Color[];
   };
   decisionId?: string;
   classId?: ClassId;

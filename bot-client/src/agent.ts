@@ -202,8 +202,11 @@ export class Agent {
         }
         if (spec.needs?.extra === "declaredColor") {
           a.declaredColor = asColor(reply.declaredColor, "declaredColor");
-        } else if (spec.needs?.extra && reply.extra) {
-          a.extra = reply.extra;
+        } else {
+          if (spec.needs?.extra && reply.extra) a.extra = reply.extra;
+          if (spec.needs?.declareColors && reply.declaredColor) {
+            a.declaredColor = asColor(reply.declaredColor, "declaredColor");
+          }
         }
         return a;
       }

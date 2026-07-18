@@ -292,8 +292,9 @@ Every v1 open question, answered by the designer. `F` = follow-up round.
 - **M10.** Crippling Curse is simplified to a hard lock: the viewed card simply cannot be played until color change (no "unless the Warlock allows it" flow). The Warlock views/locks a fresh card at the start of each of their turns while it lasts.
 - **M11.** A generic Counter with no last-attacker on record falls back to hitting the next enemy. With 2 players, Reverse just flips direction (no UNO-style skip).
 - **M12.** Rally attack targeting: abilities that repurpose the rally draws toward allies or third parties (Pray, Fate Maker, Misdirection) attack a freely chosen target (default next enemy); all other rallies attack the rally victim.
-- **M13.** It's Not Cheating (TH-I): the declared color drives matching and becomes the new active color; ability triggering and the color bonus use the card's printed color ("works as normal").
+- **M13.** It's Not Cheating (TH-I): the declared color drives matching and becomes the new active color; ability triggering and the color bonus use the card's printed color ("works as normal"). Because the declared color drives matching, the declaration must still make the play legal: a card whose number matches the field may be declared any color (changing the active color); a card that matches neither may only be declared as the field's active color. Declaring is optional when the card already matches by number.
 - **M14.** Stuns don't stack: applying a stun to an already-stunned player keeps the longer of the two durations. Loaded Dice arms after the granted attack of the card that created it (per the ability text). A player's own AoE-causing color change cannot trigger their own Surprise! trap (A5).
+- **M15.** Dispel Magic (SO-C) wards its target: it triggers only on qualifying cards played by someone **other than** the target — the target's own plays never trigger it. When it triggers, that card's damage, statuses, stuns, and forced draws are negated **against the target only**; the card resolves normally against everyone else. A qualifying card that never touches the target leaves the ward armed.
 
 ---
 
