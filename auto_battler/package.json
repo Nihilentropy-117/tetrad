@@ -1,0 +1,20 @@
+{
+  "name": "tetrad-auto-battler",
+  "version": "0.1.0",
+  "private": true,
+  "description": "LLM-vs-LLM self-play harness for Tetrad — spawns the server, pits two OpenRouter models against each other, logs every game, and surveys the players afterwards. Standalone; modifies no game code (imports bot-client sources read-only).",
+  "type": "module",
+  "scripts": {
+    "start": "tsx src/main.ts",
+    "typecheck": "tsc --noEmit"
+  },
+  "dependencies": {
+    "ws": "^8.18.0"
+  },
+  "devDependencies": {
+    "@types/node": "^22.10.0",
+    "@types/ws": "^8.5.13",
+    "tsx": "^4.19.0",
+    "typescript": "^5.7.0"
+  }
+}
